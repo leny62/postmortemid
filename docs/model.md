@@ -50,19 +50,29 @@ Every verification stored by the app records three versions:
 
 | Version | Example | Meaning |
 |---|---|---|
-| Model | `pmid-lbp-demo-v0.1` | Encoder that produced the embeddings |
-| Threshold file | `e0-lbp-dev-v0.1` | Where tau(FAR 1%) and tau(FAR 0.1%) came from |
+| Model | `pmid-mnv3-arcface-e0-v0.1` | Encoder that produced the embeddings |
+| Threshold file | `e0-arcface-tflite-dev-v0.1` | Where tau(FAR 1%) and tau(FAR 0.1%) came from |
 | App | `0.1.0+1` | Flutter build |
 
 A template can only be compared with a query from the same model version.
 
 ## What runs on the phone today
 
-The app currently uses `pmid-lbp-demo-v0.1`, a uniform LBP histogram descriptor (64 x 64 grayscale, 4 x 4 grid, 944 dimensions), because the MobileNetV3 model has not yet been exported to TensorFlow Lite. LBP is a real, measured baseline in the notebook, and its thresholds come from the same E0 dev animals, but it is weaker than the CNN models and it is **not** the research model. The app says this on the home screen and on every result.
+The app runs `pmid-mnv3-arcface-e0-v0.1.tflite`, the ArcFace model above, exported to TensorFlow Lite (LiteRT) in float32 (14.0 MB). ImageNet normalisation is part of the exported model. The phone resizes the whole image to 224 x 224 with an antialiased bilinear filter, the same filter PIL uses and close to the training resize.
+
+The export was checked in three steps:
+
+1. TFLite against PyTorch on 50 images: cosine similarity 1.000000 at the lowest.
+2. Dev and test animals scored again with the TFLite model and the phone's resize. Thresholds for the app (tau(FAR 1%) = 0.399, tau(FAR 0.1%) = 0.541) come from dev animals. On test animals: ROC-AUC 0.993, EER 2.0%, TAR 96.3% at a realised FAR of 0.94%, close to the notebook's PyTorch numbers.
+3. On the Android emulator, the on-device embedding of a fixed test pattern matched the laptop's (cosine 1.000000). One embedding took about 22 ms after a 71 ms first run; this is an emulator on a laptop, not a low-cost phone.
+
+A first export used an area-average resize instead. It repeats pixels when enlarging, and since half the public crops are smaller than 224 px, the inputs looked different from training: test EER rose to 5.2% and the realised FAR at the 1% target was 3.5%. Matching the training resize fixed this. Both runs are in `ml/experiments/README.md`.
+
+The LBP histogram encoder (`pmid-lbp-demo-v0.1`) is still in the app as a fallback and can be selected with `export_app_manifest.py --encoder lbp`.
 
 ## Current limitations
 
 - All measurements are live-to-live on public data. Post-mortem performance is unknown.
-- No detector yet; the app uses the centre square of the photo, which the camera guide asks the user to fill with the muzzle.
-- The ArcFace model is trained and evaluated in Python but not yet on the phone.
+- No detector yet. Camera photos are cropped to the square guide the user fills with the muzzle; imported images are used whole, like the public crops.
+- Inference time on a low-cost phone has not been measured yet, and reduced-precision weights have not been tried.
 - The quality limits are starting values from public images and will be checked against pilot images.

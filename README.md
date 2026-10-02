@@ -19,7 +19,8 @@ This repository contains the first working version of the software for that stud
 - Verification of a query image against a claimed animal, at time point T0, P0 or P1
 - Match / Review / No match decision from two thresholds, with the score, thresholds and versions shown
 - History of all results in local SQLite, each traceable to model, threshold and app versions
-- Clear labelling that the current encoder is a demonstration encoder, not the research model
+- The trained MobileNetV3-Large ArcFace model runs on the phone with TensorFlow Lite (LiteRT), fully offline; an LBP texture encoder is kept as a fallback
+- Clear labelling that the model was trained on public live-cattle images only and that post-mortem use has not been measured
 
 **Research pipeline (Python, `uv`)**
 
@@ -27,7 +28,7 @@ This repository contains the first working version of the software for that stud
 - Identity-disjoint train / dev / test split with leakage checks
 - Five verification models: SIFT, LBP, frozen ImageNet MobileNetV3-Large, and MobileNetV3-Large trained with softmax and with ArcFace
 - Thresholds set on dev animals, metrics on test animals, bootstrap confidence intervals over animals
-- Export of encoder settings and thresholds to the app, with a test that checks Python and Dart compute the same features
+- TFLite export with thresholds re-set on dev animals using the exact phone preprocessing, plus tests that check Python and Dart compute the same inputs and features
 
 ## Screenshots
 
@@ -58,7 +59,7 @@ flowchart LR
     end
 ```
 
-The app loads a manifest exported by the pipeline that names the encoder, its settings, the thresholds and the quality limits. `BiometricEncoder` is an interface. Today it is implemented by an LBP texture encoder in plain Dart. The trained MobileNetV3 model will be exported to TensorFlow Lite and added as a second implementation, without changes to the screens or storage. See [docs/architecture.md](docs/architecture.md).
+The app loads a manifest exported by the pipeline that names the encoder, its model file, the thresholds and the quality limits. `BiometricEncoder` is an interface with two implementations: `TfliteEncoder` runs the exported MobileNetV3-Large ArcFace model, and `LbpEncoder` is a plain-Dart fallback. Changing the model is a manifest and asset change; screens and storage stay the same. See [docs/architecture.md](docs/architecture.md).
 
 ## Repository structure
 
@@ -104,11 +105,15 @@ To run it without opening JupyterLab:
 uv run jupyter nbconvert --to notebook --execute --inplace ml/notebooks/01_e0_public_baseline.ipynb
 ```
 
-After a run, update the app manifest from the new results:
+The trained phone model is already in `mobile/assets/model/`. To rebuild it from scratch:
 
 ```bash
-uv run python ml/scripts/export_app_manifest.py
+uv run python ml/scripts/train_arcface.py         # retrains E0 ArcFace, checks it equals the notebook, saves weights
+uv run --script ml/scripts/export_tflite.py       # converts to TFLite in its own pinned environment, re-sets dev thresholds
+uv run python ml/scripts/export_app_manifest.py   # writes the app manifest (add --encoder lbp for the fallback)
 ```
+
+`export_tflite.py` runs in a separate environment because the converter (litert-torch 0.9.4) needs PyTorch below 2.14. The first run downloads about 1 GB of converter dependencies.
 
 Checks:
 
@@ -139,6 +144,7 @@ Checks:
 cd mobile
 flutter analyze
 flutter test
+flutter test integration_test    # needs a running emulator or phone; checks on-device model output and timing
 ```
 
 ## Initial results
@@ -148,7 +154,7 @@ Experiment E0, public live-cattle data only. 52 test animals never used for trai
 | Model | ROC-AUC | EER [95% CI] | TAR at dev FAR 1% threshold [95% CI] | Realised test FAR |
 |---|---|---|---|---|
 | SIFT matching | 0.968 | 7.7% [3.8, 10.2] | 75.1% [61.6, 87.1] | 0.18% |
-| LBP (runs in the app today) | 0.936 | 11.2% [6.3, 16.4] | 78.4% [69.2, 86.8] | 0.50% |
+| LBP (app fallback) | 0.936 | 11.2% [6.3, 16.4] | 78.4% [69.2, 86.8] | 0.50% |
 | MobileNetV3-Large, ImageNet, no training | 0.968 | 6.6% [3.6, 10.2] | 88.5% [82.1, 94.1] | 0.50% |
 | MobileNetV3-Large, softmax | 0.993 | 2.5% [0.9, 5.7] | 95.6% [91.3, 99.0] | 0.89% |
 | **MobileNetV3-Large, ArcFace (proposed)** | **0.994** | **2.2% [0.7, 5.5]** | **96.5% [92.5, 99.5]** | 0.87% |
@@ -162,12 +168,20 @@ What these numbers mean:
 
 Two independent full runs gave identical numbers. Details, figures and error analysis are in the notebook and [ml/experiments/README.md](ml/experiments/README.md).
 
+**The model on the phone.** The ArcFace model was exported to TensorFlow Lite (14.0 MB, float32) and scored again on the same dev and test animals with the exact resize the app performs. Thresholds for the app were set on dev animals with this pipeline.
+
+| | ROC-AUC | EER | TAR at dev FAR 1% threshold | Realised test FAR | TAR at dev FAR 0.1% | Realised test FAR |
+|---|---|---|---|---|---|---|
+| ArcFace, TFLite with phone preprocessing | 0.993 | 2.0% | 96.3% | 0.94% | 93.0% | 0.19% |
+
+On the Android emulator, the on-device output matched the laptop's TFLite output (cosine 1.000000 on a fixed test pattern), and one embedding took about 22 ms after a 71 ms first run. The emulator runs on a fast laptop, so this is not the timing of a low-cost phone; that is measured in the on-device tests of the study.
+
 ![ROC and DET curves](docs/figures/e0_roc_det.png)
 
 ## Deployment plan
 
-1. **Now: local offline prototype.** The Flutter app runs on Android with no network. Images, templates and results stay in app storage and SQLite. Encoder: LBP demonstration encoder with E0 dev thresholds.
-2. **Next: on-device research model.** Export the MobileNetV3-Large ArcFace model to TensorFlow Lite with reduced-precision weights, add it as a second `BiometricEncoder`, and ship it with a new manifest. Measure model size, inference time and agreement with desktop scores on both study phones.
+1. **Now: local offline prototype.** The Flutter app runs on Android with no network. Images, templates and results stay in app storage and SQLite. Encoder: the E0 ArcFace MobileNetV3-Large model in TensorFlow Lite, with thresholds set on E0 dev animals.
+2. **Next: on-device tests on the study phones.** Measure inference time on the two low-cost Android phones, try reduced-precision weights and report any change in scores, and replace the model with one trained on the study's development animals.
 3. **Detector.** Label muzzle and face boxes on pilot images and train a small YOLO detector, so the app crops the biometric region instead of using the centre square.
 4. **Optional synchronisation.** A small FastAPI and PostgreSQL service to collect records from the study phones and serve new model versions, only if the field study needs it. The app must keep working offline.
 5. **Research validation.** After ethics clearance and a facility agreement: pilot, then paired live and post-mortem capture, and experiments E1 to E7 on held-out animals. Thresholds will be set again on the study data.
@@ -180,14 +194,14 @@ Demonstrated:
 
 - the full offline capture, quality check, enrolment, verification and history workflow on Android
 - a leakage-controlled live-to-live evaluation on public data with measured, reproducible metrics
-- that the phone computes the same features as the research pipeline
+- the trained ArcFace model running on the phone, with the same output as on the laptop
 
 Not demonstrated:
 
 - any post-mortem result. No post-mortem images exist yet.
 - the face comparator, cross-phone effects or time since slaughter
 - performance on Rwandan cattle or smartphone images
-- the research model running on the phone; the app uses the weaker LBP demonstration encoder
+- on-device speed on a low-cost phone; timings so far come from an emulator on a laptop
 - automatic muzzle detection
 - suitability for insurance, traceability or any operational decision
 
@@ -202,6 +216,7 @@ The duplicate-identity cleaning found 7 of the 19 duplicates reported by BC et a
 | Baselines: SIFT, generic features, softmax MobileNetV3 | SIFT, frozen ImageNet MobileNetV3 and softmax MobileNetV3 run. DINOv2 is planned for the pilot sanity check |
 | MobileNetV3-Large + ArcFace, k-image templates, cosine similarity | Implemented and trained on public data; k = 1, 3, 5 reported |
 | Match / Review / No match from tau(FAR 1%) and tau(FAR 0.1%) | Implemented in Python and in the app |
+| On-device inference with TensorFlow Lite | E0 ArcFace model running in the app via LiteRT; output matches the laptop on the emulator; timing on low-cost study phones pending |
 | Offline Flutter app, SQLite, model versioning (FR1 to FR7, NFR5 to NFR8) | Implemented; export (FR3) and sync (FR8) are later increments |
 | E0 public-data baseline | Done |
 | E1 to E7 paired experiments | Planned, need field data |

@@ -12,7 +12,7 @@ This document separates what has been run (E0) from what the research study will
 | Enrolment | First 3 images in capture order form the template; all later images are queries |
 | Comparisons | Each query against its own template (genuine) and every other template in the split (impostor) |
 | Thresholds | tau(FAR 1%) and tau(FAR 0.1%) set on dev impostor scores, then applied unchanged to test |
-| Models | SIFT matching; LBP histogram (on-device demo encoder); frozen ImageNet MobileNetV3-Large; MobileNetV3-Large trained with softmax; MobileNetV3-Large trained with ArcFace (proposed) |
+| Models | SIFT matching; LBP histogram (app fallback encoder); frozen ImageNet MobileNetV3-Large; MobileNetV3-Large trained with softmax; MobileNetV3-Large trained with ArcFace (proposed) |
 | Metrics | ROC-AUC, EER, TAR at calibrated FAR 1% and 0.1% with realised test FAR, oracle TAR, Rank-1, open-set rejection, bootstrap 95% CIs over test animals |
 | Config | `ml/configs/e0.json` |
 | Notebook | `ml/notebooks/01_e0_public_baseline.ipynb` |
@@ -51,5 +51,5 @@ For the paired data, animals are split into development and test sets within eac
 
 1. Re-run the E0 protocol with the cleaned identity list from BC et al. (2026) if it becomes available, and compare.
 2. Label muzzle and face boxes on pilot images and train a small YOLO detector (detection is evaluated separately from verification).
-3. Export the ArcFace model to TensorFlow Lite, add it as a second `BiometricEncoder`, and measure on-device size, time and score agreement.
+3. Measure on-device time and score agreement on the two study phones (the export and an emulator check are done), and test reduced-precision weights.
 4. Run the pilot DINOv2 sanity check on the first linked live and post-mortem pairs, as described in the proposal.

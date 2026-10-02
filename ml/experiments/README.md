@@ -44,6 +44,23 @@ Notes:
 - The weakest genuine scores come from blurred queries of one animal; 16 rejected genuine queries come from 4 animals.
 - LBP dev thresholds exported to the app: tau(FAR 1%) = 0.9199, tau(FAR 0.1%) = 0.9260 (`e0-lbp-dev-v0.1`).
 
+## E0-c: ArcFace exported to TFLite for the phone
+
+| | |
+|---|---|
+| Date | 2 October 2026 |
+| Model | E0-b ArcFace weights, retrained with `ml/scripts/train_arcface.py` (test metrics checked equal to the notebook before saving) |
+| Export | `ml/scripts/export_tflite.py`, litert-torch 0.9.4 with torch 2.13 in an isolated environment, float32, 14.0 MB, ImageNet normalisation inside the model |
+| Check | TFLite against PyTorch on 50 images: minimum cosine 1.000000 |
+
+First attempt (not shipped): the phone resized with an area average, which repeats pixels when enlarging small crops. Test: ROC-AUC 0.982, EER 5.2%, TAR 92.3% at a realised FAR of 3.5% (target 1%). The inputs no longer looked like the training images.
+
+Second attempt (shipped): antialiased bilinear resize, PIL's filter in floats, matching training. Dev thresholds tau(FAR 1%) = 0.3991 and tau(FAR 0.1%) = 0.5415 (`e0-arcface-tflite-dev-v0.1`). Test: ROC-AUC 0.993, EER 2.0%, TAR 96.3% at a realised FAR of 0.94%, TAR 93.0% at a realised FAR of 0.19% (target 0.1%), Rank-1 96.9%. Full numbers in `e0_tflite.json`.
+
+On-device check (Android emulator on an Apple M5 Pro laptop, `flutter test integration_test`): output for a fixed test pattern matched the laptop (cosine 1.000000); 71 ms first inference, 21.5 ms mean over 10 runs, excluding image decoding. Not representative of a low-cost phone.
+
+App check on the emulator: a genuine test-split query scored 0.898 (Match) and an impostor 0.018 (No match).
+
 ## App quality limits (from E0 data)
 
 | | |
