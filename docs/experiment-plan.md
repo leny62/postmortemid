@@ -13,7 +13,7 @@ This document separates what has been run (E0) from what the research study will
 | Comparisons | Each query against its own template (genuine) and every other template in the split (impostor) |
 | Thresholds | tau(FAR 1%) and tau(FAR 0.1%) set on dev impostor scores, then applied unchanged to test |
 | Models | SIFT matching; LBP histogram (app fallback encoder); frozen ImageNet MobileNetV3-Large; MobileNetV3-Large trained with softmax; MobileNetV3-Large trained with ArcFace (proposed) |
-| Metrics | ROC-AUC, EER, TAR at calibrated FAR 1% and 0.1% with realised test FAR, oracle TAR, Rank-1, open-set rejection, bootstrap 95% CIs over test animals |
+| Metrics | ROC-AUC, EER, TAR at calibrated FAR 1% and 0.1% with realised test FAR, oracle TAR, Rank-1, open-set rejection, 95% bootstrap CIs (2,000 resamples of test animals; both animals of each comparison are resampled) |
 | Config | `ml/configs/e0.json` |
 | Notebook | `ml/notebooks/01_e0_public_baseline.ipynb` |
 | Results | `ml/experiments/e0_results.json`, summarised in `ml/experiments/README.md` |
@@ -24,7 +24,7 @@ This document separates what has been run (E0) from what the research study will
 2. Animals, not images, are split. `splits.check_disjoint` fails if an animal or an identical file appears in two splits.
 3. Near-identical frames within an animal are removed, so a query cannot match its own near copy in the template.
 4. The fine-tuned models see train animals only. The dev curve is logged for monitoring, but the final epoch is always used, so dev animals do not choose the checkpoint.
-5. LBP settings and all thresholds are chosen on dev animals. Test animals are scored once.
+5. LBP settings and all thresholds are chosen on dev animals. Test animals are used only for reporting. They were scored by the notebook and by the TFLite export; the export's preprocessing was changed after its first test scores, and dev data alone support the same change (see `ml/experiments/README.md`, E0-c).
 
 ### What E0 does not show
 
