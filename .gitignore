@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Dataset images and derived caches (downloaded, never committed)
+ml/data/raw/
+ml/data/cache/
+ml/data/demo/
+
+# Trained weights (reproduced by the notebook)
+ml/artifacts/
+*.pt
+*.pth
+
+# Environment and secrets
+.env
+.env.*
+
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
