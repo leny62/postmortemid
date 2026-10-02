@@ -1,0 +1,23 @@
+{
+  "status": "Initial public-data demonstration. The encoder is an LBP texture descriptor that shows the offline workflow. It is not the research model, and post-mortem performance has not been measured.",
+  "calibration": "Thresholds were set on 52 development animals from a public database of live cattle (experiment E0, live-to-live).",
+  "encoder": {
+    "type": "lbp",
+    "model_version": "pmid-lbp-demo-v0.1",
+    "size": 64,
+    "grid": 4
+  },
+  "thresholds": {
+    "version": "e0-lbp-dev-v0.1",
+    "tau_far1": 0.9199322386761868,
+    "tau_far01": 0.9259521349857059,
+    "source": "E0 dev animals, FAR targets 1% and 0.1%"
+  },
+  "quality": {
+    "min_side": 256,
+    "min_brightness": 50,
+    "max_brightness": 220,
+    "min_sharpness": 15
+  },
+  "enrolment_images": 3
+}
