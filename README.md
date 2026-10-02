@@ -256,3 +256,7 @@ The muzzle images are from Xiong, Li and Erickson (2022), *Beef Cattle Muzzle/No
 ## Repository link
 
 https://github.com/leny62/postmortemid
+
+## Demo video
+
+https://drive.google.com/file/d/1o-lUxp4iuwQxknmjIK7xS2N914qdXMX8/view?usp=sharing
