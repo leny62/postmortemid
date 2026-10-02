@@ -12,20 +12,26 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def assign_roles(df: pd.DataFrame, k: int) -> pd.DataFrame:
+def assign_roles(df: pd.DataFrame, k: int, query_start: int | None = None) -> pd.DataFrame:
     """Mark the first k captured images of each animal as enrolment and later ones as queries.
 
     Capture order follows the camera frame number, so queries are always taken
-    after enrolment, as in the study protocol. Animals without a query image
-    after enrolment are dropped.
+    after enrolment, as in the study protocol. query_start (default k) is the
+    position of the first query; images between enrolment and query_start are
+    left out, so different k can be compared on the same queries. Animals
+    without a query image are dropped.
     """
+    start = k if query_start is None else query_start
+    if start < k:
+        raise ValueError("query_start must be at least k")
     order = ["identity", "frame", "file"] if "frame" in df else ["identity"]
     parts = []
     for _, group in df.sort_values(order, kind="stable").groupby("identity", sort=True):
-        if len(group) <= k:
+        if len(group) <= start:
             continue
-        roles = np.where(np.arange(len(group)) < k, "enrol", "query")
-        parts.append(group.assign(role=roles))
+        position = np.arange(len(group))
+        roles = np.where(position < k, "enrol", np.where(position >= start, "query", "unused"))
+        parts.append(group.assign(role=roles)[roles != "unused"])
     return pd.concat(parts).sort_index()
 
 

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from postmortemid import splits, verification
+from postmortemid import sift, splits, verification
 from postmortemid.decision import Decision, decide
 
 
@@ -78,3 +78,47 @@ def test_enrolment_uses_the_earliest_frames():
     roles = verification.assign_roles(df, k=3)
     enrolled = roles.loc[roles["role"] == "enrol", "frame"].tolist()
     assert sorted(enrolled) == [10, 20, 30]
+
+
+def test_query_start_keeps_the_same_queries_for_every_k():
+    df = pd.DataFrame(
+        {
+            "identity": ["a"] * 8 + ["b"] * 5,
+            "frame": list(range(8)) + list(range(5)),
+            "file": [f"f{n}" for n in range(13)],
+        }
+    )
+    queries = [
+        verification.assign_roles(df, k, query_start=5).query("role == 'query'")["frame"].tolist()
+        for k in (1, 3, 5)
+    ]
+    assert queries[0] == queries[1] == queries[2] == [5, 6, 7]
+    with pytest.raises(ValueError):
+        verification.assign_roles(df, 3, query_start=2)
+
+
+def test_open_set_rejection_counts_queries_with_a_strong_impostor():
+    scores = pd.DataFrame(
+        {
+            "query_pos": [0, 0, 1, 1],
+            "query_identity": ["a", "a", "b", "b"],
+            "template_identity": ["a", "b", "b", "a"],
+            "score": [0.9, 0.7, 0.9, 0.2],
+            "genuine": [True, False, True, False],
+        }
+    )
+    assert verification.open_set_rejection_rate(scores, tau=0.5) == 0.5
+    assert verification.rank1_accuracy(scores) == 1.0
+
+
+def test_sift_scores_own_animal_and_sampled_impostors(monkeypatch):
+    df = frame(5, 4)
+    roles = verification.assign_roles(df, k=3).reset_index(drop=True)
+    empty: tuple[np.ndarray, np.ndarray | None] = (np.zeros((0, 2), np.float32), None)
+    monkeypatch.setattr(sift, "inlier_matches", lambda a, b: 1)
+    scores = sift.score_sampled(roles, [empty] * len(roles), impostors_per_query=2, seed=0)
+    for _, rows in scores.groupby("query_pos"):
+        assert len(rows) == 3
+        assert rows["genuine"].to_numpy().sum() == 1
+    own = scores["query_identity"] == scores["template_identity"]
+    assert scores["genuine"].equals(own)

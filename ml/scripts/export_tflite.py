@@ -16,12 +16,13 @@
 The converter needs an older PyTorch than the main environment, so this runs
 as a standalone script with its own pinned dependencies:
 
-    uv run --script ml/scripts/export_tflite.py
+    uv run --script ml/scripts/export_tflite.py [--score-test]
 
 It converts the saved weights, checks the TFLite output against PyTorch,
-then scores dev and test animals with the TFLite model and the exact
-preprocessing the app uses. The thresholds written to
-ml/experiments/e0_tflite.json are the ones the app applies.
+then scores dev animals with the TFLite model and the exact preprocessing
+the app uses. The thresholds written to ml/experiments/e0_tflite.json are
+the ones the app applies. Test animals are scored only with --score-test,
+once the export is final, so test numbers cannot steer export choices.
 """
 
 import argparse
@@ -97,6 +98,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture-only", action="store_true")
+    parser.add_argument("--score-test", action="store_true")
     args = parser.parse_args()
 
     saved = torch.load(WEIGHTS, map_location="cpu")
@@ -124,7 +126,8 @@ def main() -> None:
         return
 
     data = e0.load()
-    keep = data.images["split"].isin(["dev", "test"]).to_numpy()
+    scored = ["dev", "test"] if args.score_test else ["dev"]
+    keep = data.images["split"].isin(scored).to_numpy()
     emb = np.zeros((len(data.images), saved["config"]["embedding_dim"]), dtype=np.float32)
     agreement = []
     with torch.no_grad():
@@ -136,9 +139,10 @@ def main() -> None:
                 agreement.append(float(verification.cosine(ref, emb[i])))
     print(f"TFLite vs PyTorch cosine on 50 images: min {min(agreement):.6f}")
 
-    dev, test = e0.scores_for(data, emb, "dev"), e0.scores_for(data, emb, "test")
+    dev = e0.scores_for(data, emb, "dev")
     th = e0.calibrate(dev)
-    summary = metrics.summarise(test, th["tau_far1"], th["tau_far01"])
+    g = dev.loc[dev["genuine"], "score"].to_numpy()
+    i = dev.loc[~dev["genuine"], "score"].to_numpy()
     result = {
         "model_file": OUT.name,
         "model_bytes": OUT.stat().st_size,
@@ -148,12 +152,14 @@ def main() -> None:
         },
         "tflite_vs_pytorch_min_cosine": min(agreement),
         **th,
-        "test": summary,
-        "rank1": verification.rank1_accuracy(test),
+        "dev": {"roc_auc": metrics.roc_auc(g, i), "eer": metrics.eer(g, i)[0]},
     }
+    if args.score_test:
+        test = e0.scores_for(data, emb, "test")
+        result["test"] = metrics.summarise(test, th["tau_far1"], th["tau_far01"])
+        result["rank1"] = verification.rank1_accuracy(test)
     (paths.EXPERIMENTS / "e0_tflite.json").write_text(json.dumps(result, indent=2) + "\n")
-    print(json.dumps({k: result[k] for k in ("tau_far1", "tau_far01", "rank1")}, indent=2))
-    print(json.dumps(summary, indent=2))
+    print(json.dumps({k: v for k, v in result.items() if k != "input"}, indent=2))
 
 
 if __name__ == "__main__":

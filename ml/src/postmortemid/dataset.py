@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageOps
 
 from postmortemid import sift
 
@@ -147,16 +147,18 @@ def identities_to_drop(pairs: pd.DataFrame, counts: pd.Series) -> list[str]:
     return sorted(drop)
 
 
-def load_cache(df: pd.DataFrame, root: Path, cache: Path, size: int) -> np.ndarray:
+def load_cache(df: pd.DataFrame, root: Path, cache: Path | None, size: int) -> np.ndarray:
     """All images resized to size x size RGB uint8, cached as one .npy file in row order."""
-    if cache.exists():
+    if cache is not None and cache.exists():
         images = np.load(cache, mmap_mode="r")
         if images.shape[0] == len(df) and images.shape[1] == size:
             return images
     out = np.empty((len(df), size, size, 3), dtype=np.uint8)
     for i, rel in enumerate(df["path"]):
         with Image.open(root / rel) as im:
-            out[i] = np.asarray(im.convert("RGB").resize((size, size), Image.Resampling.BILINEAR))
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    np.save(cache, out)
+            upright = ImageOps.exif_transpose(im).convert("RGB")
+            out[i] = np.asarray(upright.resize((size, size), Image.Resampling.BILINEAR))
+    if cache is not None:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache, out)
     return out

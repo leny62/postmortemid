@@ -19,9 +19,17 @@ def roc_auc(genuine: np.ndarray, impostor: np.ndarray) -> float:
     return float(roc_auc_score(y, np.r_[genuine, impostor]))
 
 
-def eer(genuine: np.ndarray, impostor: np.ndarray) -> tuple[float, float]:
+def eer(
+    genuine: np.ndarray,
+    impostor: np.ndarray,
+    genuine_weight: np.ndarray | None = None,
+    impostor_weight: np.ndarray | None = None,
+) -> tuple[float, float]:
     y = np.r_[np.ones(len(genuine)), np.zeros(len(impostor))]
-    far, tar, thresholds = roc_curve(y, np.r_[genuine, impostor])
+    weight = None
+    if genuine_weight is not None and impostor_weight is not None:
+        weight = np.r_[genuine_weight, impostor_weight]
+    far, tar, thresholds = roc_curve(y, np.r_[genuine, impostor], sample_weight=weight)
     frr = 1 - tar
     i = int(np.argmin(np.abs(far - frr)))
     return float((far[i] + frr[i]) / 2), float(thresholds[i])
@@ -45,9 +53,16 @@ class Rates:
     frr: float
 
 
-def rates_at(genuine: np.ndarray, impostor: np.ndarray, threshold: float) -> Rates:
-    tar = float(np.mean(genuine >= threshold))
-    return Rates(tar=tar, far=float(np.mean(impostor >= threshold)), frr=1 - tar)
+def rates_at(
+    genuine: np.ndarray,
+    impostor: np.ndarray,
+    threshold: float,
+    genuine_weight: np.ndarray | None = None,
+    impostor_weight: np.ndarray | None = None,
+) -> Rates:
+    tar = float(np.average(genuine >= threshold, weights=genuine_weight))
+    far = float(np.average(impostor >= threshold, weights=impostor_weight))
+    return Rates(tar=tar, far=far, frr=1 - tar)
 
 
 def tar_at_far(genuine: np.ndarray, impostor: np.ndarray, far: float) -> float:
@@ -76,25 +91,32 @@ def summarise(scores: pd.DataFrame, tau_far1: float, tau_far01: float) -> dict[s
 
 def bootstrap_ci(
     scores: pd.DataFrame,
-    statistic: Callable[[np.ndarray, np.ndarray], float],
-    n_resamples: int = 1000,
+    statistic: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], float],
+    n_resamples: int = 2000,
     seed: int = 0,
     level: float = 0.95,
 ) -> tuple[float, float]:
-    """Percentile CI from resampling query animals with replacement.
+    """Percentile CI from resampling animals with replacement (subsets bootstrap).
 
-    Comparisons from one animal are correlated, so the animal, not the image
-    pair, is the resampling unit (proposal Section 3.2.4).
+    Comparisons that share an animal are correlated, and an impostor comparison
+    involves two animals, the query and the template. Each resample draws
+    animals; a genuine comparison is weighted by how often its animal was
+    drawn, an impostor comparison by the product for its two animals (Bolle,
+    Ratha and Pankanti, 2004). statistic receives genuine scores, impostor
+    scores and their weights.
     """
+    animals = sorted(set(scores["query_identity"]) | set(scores["template_identity"]))
+    query = pd.Categorical(scores["query_identity"], categories=animals).codes
+    template = pd.Categorical(scores["template_identity"], categories=animals).codes
+    genuine = scores["genuine"].to_numpy(dtype=bool)
+    score = scores["score"].to_numpy()
     rng = np.random.default_rng(seed)
-    groups = {k: _split(v) for k, v in scores.groupby("query_identity")}
-    keys = list(groups)
     values = []
     for _ in range(n_resamples):
-        picked = rng.choice(len(keys), size=len(keys), replace=True)
-        g = np.concatenate([groups[keys[j]][0] for j in picked])
-        i = np.concatenate([groups[keys[j]][1] for j in picked])
-        values.append(statistic(g, i))
+        drawn = np.bincount(rng.integers(len(animals), size=len(animals)), minlength=len(animals))
+        weight = np.where(genuine, drawn[query], drawn[query] * drawn[template]).astype(float)
+        g, i = genuine & (weight > 0), ~genuine & (weight > 0)
+        values.append(statistic(score[g], score[i], weight[g], weight[i]))
     alpha = (1 - level) / 2
     lo, hi = np.quantile(values, [alpha, 1 - alpha])
     return float(lo), float(hi)

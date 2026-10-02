@@ -27,19 +27,24 @@ class E0Data:
 
 def load(cfg_name: str = "e0.json") -> E0Data:
     cfg = json.loads((paths.CONFIGS / cfg_name).read_text())
-    images = pd.read_csv(paths.SPLITS / "e0_images.csv")
+    return from_images(cfg, pd.read_csv(paths.SPLITS / "e0_images.csv"))
+
+
+def from_images(cfg: dict, images: pd.DataFrame, cache: bool = True) -> E0Data:
+    """Pixels for any image table; cached on disk unless cache is False."""
     size = cfg["image_cache_size"]
     digest = hashlib.sha1("\n".join(images["path"]).encode()).hexdigest()[:10]
-    pixels = dataset.load_cache(images, paths.RAW, paths.CACHE / f"e0_{size}_{digest}.npy", size)
+    path = paths.CACHE / f"e0_{size}_{digest}.npy" if cache else None
+    pixels = dataset.load_cache(images, paths.RAW, path, size)
     return E0Data(cfg=cfg, images=images, pixels=pixels)
 
 
 def split_with_roles(
-    data: E0Data, split: str, k: int | None = None
+    data: E0Data, split: str, k: int | None = None, query_start: int | None = None
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """Rows of one split with enrol/query roles; also returns their positions in data.images."""
     part = data.images[data.images["split"] == split]
-    roles = verification.assign_roles(part, k or data.cfg["protocol"]["k_enrol"])
+    roles = verification.assign_roles(part, k or data.cfg["protocol"]["k_enrol"], query_start)
     return roles, roles.index.to_numpy()
 
 
@@ -69,8 +74,14 @@ def sift_features(data: E0Data, positions: np.ndarray) -> list:
     return out
 
 
-def scores_for(data: E0Data, emb: np.ndarray, split: str, k: int | None = None) -> pd.DataFrame:
-    roles, pos = split_with_roles(data, split, k)
+def scores_for(
+    data: E0Data,
+    emb: np.ndarray,
+    split: str,
+    k: int | None = None,
+    query_start: int | None = None,
+) -> pd.DataFrame:
+    roles, pos = split_with_roles(data, split, k, query_start)
     return verification.score_all(roles.reset_index(drop=True), emb[pos])
 
 
@@ -131,16 +142,21 @@ def report(
     row |= metrics.summarise(test_scores, thresholds["tau_far1"], thresholds["tau_far01"])
     b = cfg["bootstrap"]
 
-    def eer_stat(g: np.ndarray, i: np.ndarray) -> float:
-        return metrics.eer(g, i)[0]
+    def eer_stat(g: np.ndarray, i: np.ndarray, gw: np.ndarray, iw: np.ndarray) -> float:
+        return metrics.eer(g, i, gw, iw)[0]
 
-    def tar1_stat(g: np.ndarray, i: np.ndarray) -> float:
-        return metrics.rates_at(g, i, thresholds["tau_far1"]).tar
+    def tar1_stat(g: np.ndarray, i: np.ndarray, gw: np.ndarray, iw: np.ndarray) -> float:
+        return metrics.rates_at(g, i, thresholds["tau_far1"], gw, iw).tar
 
-    row["eer_ci"] = metrics.bootstrap_ci(test_scores, eer_stat, b["n_resamples"], b["seed"])
-    row["calibrated_tar_at_far1_ci"] = metrics.bootstrap_ci(
-        test_scores, tar1_stat, b["n_resamples"], b["seed"]
-    )
+    def far1_stat(g: np.ndarray, i: np.ndarray, gw: np.ndarray, iw: np.ndarray) -> float:
+        return metrics.rates_at(g, i, thresholds["tau_far1"], gw, iw).far
+
+    for key, stat in [
+        ("eer", eer_stat),
+        ("calibrated_tar_at_far1", tar1_stat),
+        ("realised_far_at_far1", far1_stat),
+    ]:
+        row[f"{key}_ci"] = metrics.bootstrap_ci(test_scores, stat, b["n_resamples"], b["seed"])
     if exhaustive:
         row["rank1"] = verification.rank1_accuracy(test_scores)
         row["open_set_rejection_at_far1"] = verification.open_set_rejection_rate(
