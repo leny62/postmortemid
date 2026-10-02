@@ -4,14 +4,14 @@ import 'image_ops.dart';
 
 /// Turns a captured image into an L2-normalised embedding.
 ///
-/// The prototype ships [LbpEncoder], a demonstration encoder. The research
-/// model (MobileNetV3-Large with ArcFace, exported to TFLite) will be a second
-/// implementation of this interface, so the UI and storage do not change.
+/// [TfliteEncoder] runs the MobileNetV3-Large ArcFace model exported from the
+/// research pipeline. [LbpEncoder] is a plain-Dart texture descriptor kept as
+/// a fallback. The manifest picks one, so the UI and storage do not change.
 abstract interface class BiometricEncoder {
   String get modelVersion;
 
-  /// False for any encoder whose accuracy has not been evaluated as the research model.
+  /// True only for the model architecture the proposal specifies.
   bool get isResearchModel;
 
-  Float64List encode(GrayImage image);
+  Float64List encode(RgbImage image);
 }

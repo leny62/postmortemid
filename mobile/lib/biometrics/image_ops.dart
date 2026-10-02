@@ -16,6 +16,17 @@ class GrayImage {
   double at(int x, int y) => pixels[y * width + x];
 }
 
+/// Decoded 8-bit RGB pixels, row-major, three bytes per pixel.
+class RgbImage {
+  RgbImage(this.width, this.height, this.pixels) : assert(pixels.length == width * height * 3);
+
+  final int width;
+  final int height;
+  final Uint8List pixels;
+
+  GrayImage toGray() => grayFromRgb(pixels, width, height);
+}
+
 GrayImage grayFromRgb(Uint8List rgb, int width, int height) {
   final out = Float64List(width * height);
   for (var i = 0; i < out.length; i++) {
@@ -69,3 +80,71 @@ GrayImage boxResize(GrayImage img, int size) {
 }
 
 GrayImage graySquare(GrayImage img, int size) => boxResize(centerSquare(img), size);
+
+/// Antialiased bilinear resampling weights, PIL's BILINEAR filter in floats.
+/// Mirrors _bilinear_weights in ml/src/postmortemid/imageops.py.
+List<(int, Float64List)> _bilinearWeights(int nIn, int nOut) {
+  final scale = nIn / nOut;
+  final support = math.max(scale, 1.0);
+  return [
+    for (var i = 0; i < nOut; i++)
+      () {
+        final center = (i + 0.5) * scale;
+        final lo = math.max((center - support + 0.5).toInt(), 0);
+        final hi = math.min((center + support + 0.5).toInt(), nIn);
+        final w = Float64List(hi - lo);
+        var sum = 0.0;
+        for (var t = lo; t < hi; t++) {
+          w[t - lo] = math.max(0.0, 1.0 - ((t - center + 0.5) / support).abs());
+          sum += w[t - lo];
+        }
+        for (var k = 0; k < w.length; k++) {
+          w[k] /= sum;
+        }
+        return (lo, w);
+      }(),
+  ];
+}
+
+/// Whole-image antialiased bilinear resize to size x size, RGB interleaved, as
+/// the CNN expects. Mirrors rgb_resize in ml/src/postmortemid/imageops.py.
+Float32List rgbResize(RgbImage img, int size) {
+  final rows = _bilinearWeights(img.height, size);
+  final cols = _bilinearWeights(img.width, size);
+  // Horizontal pass first: height x size x 3.
+  final tmp = Float64List(img.height * size * 3);
+  for (var y = 0; y < img.height; y++) {
+    for (var j = 0; j < size; j++) {
+      final (lo, w) = cols[j];
+      var r = 0.0, g = 0.0, b = 0.0;
+      for (var k = 0; k < w.length; k++) {
+        final p = (y * img.width + lo + k) * 3;
+        r += w[k] * img.pixels[p];
+        g += w[k] * img.pixels[p + 1];
+        b += w[k] * img.pixels[p + 2];
+      }
+      final o = (y * size + j) * 3;
+      tmp[o] = r;
+      tmp[o + 1] = g;
+      tmp[o + 2] = b;
+    }
+  }
+  final out = Float32List(size * size * 3);
+  for (var i = 0; i < size; i++) {
+    final (lo, w) = rows[i];
+    for (var j = 0; j < size; j++) {
+      var r = 0.0, g = 0.0, b = 0.0;
+      for (var k = 0; k < w.length; k++) {
+        final p = ((lo + k) * size + j) * 3;
+        r += w[k] * tmp[p];
+        g += w[k] * tmp[p + 1];
+        b += w[k] * tmp[p + 2];
+      }
+      final o = (i * size + j) * 3;
+      out[o] = r;
+      out[o + 1] = g;
+      out[o + 2] = b;
+    }
+  }
+  return out;
+}

@@ -111,7 +111,7 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('demonstration encoder'), findsOneWidget);
+    expect(find.textContaining('LBP fallback encoder'), findsOneWidget);
     expect(find.textContaining('Post-mortem verification has not been evaluated'), findsOneWidget);
   });
 

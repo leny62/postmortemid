@@ -56,3 +56,33 @@ def box_resize(gray: np.ndarray, size: int) -> np.ndarray:
 
 def gray_square(rgb: np.ndarray, size: int) -> np.ndarray:
     return box_resize(center_square(to_gray(rgb)), size)
+
+
+def _bilinear_weights(n_in: int, n_out: int) -> np.ndarray:
+    """Antialiased bilinear resampling matrix (n_out x n_in), PIL's BILINEAR filter in floats.
+
+    When shrinking, the triangle filter is widened by the scale factor so every
+    source pixel contributes, as PIL does; when enlarging it interpolates.
+    """
+    scale = n_in / n_out
+    support = max(scale, 1.0)
+    weights = np.zeros((n_out, n_in))
+    for i in range(n_out):
+        center = (i + 0.5) * scale
+        lo = max(int(center - support + 0.5), 0)
+        hi = min(int(center + support + 0.5), n_in)
+        taps = np.arange(lo, hi)
+        w = np.maximum(0.0, 1.0 - np.abs((taps - center + 0.5) / support))
+        weights[i, lo:hi] = w / w.sum()
+    return weights
+
+
+def rgb_resize(rgb: np.ndarray, size: int) -> np.ndarray:
+    """Whole-image antialiased bilinear resize to size x size, as the phone does for the CNN input.
+
+    The image is squashed, not cropped, matching how the training images were resized.
+    Mirrored by rgbResize in mobile/lib/biometrics/image_ops.dart.
+    """
+    h, w = rgb.shape[:2]
+    rows, cols = _bilinear_weights(h, size), _bilinear_weights(w, size)
+    return np.stack([rows @ rgb[..., c].astype(np.float64) @ cols.T for c in range(3)], axis=-1)

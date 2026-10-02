@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:postmortemid/biometrics/image_analysis.dart';
+import 'package:postmortemid/biometrics/image_ops.dart';
 import 'package:postmortemid/biometrics/lbp_encoder.dart';
 import 'package:postmortemid/biometrics/quality.dart';
 import 'package:postmortemid/biometrics/verifier.dart';
@@ -11,7 +12,8 @@ import 'package:postmortemid/biometrics/verifier.dart';
 void main() {
   final expected =
       jsonDecode(File('test/fixtures/parity.json').readAsStringSync()) as Map<String, dynamic>;
-  final gray = decodeGray(File('test/fixtures/parity.png').readAsBytesSync());
+  final rgb = decodeRgb(File('test/fixtures/parity.png').readAsBytesSync());
+  final gray = rgb.toGray();
 
   test('quality measures match the Python pipeline', () {
     final m = measureQuality(gray);
@@ -29,11 +31,21 @@ void main() {
       grid: lbp['grid'] as int,
     );
     final python = (lbp['vector'] as List).cast<num>().map((v) => v.toDouble()).toList();
-    final dart = encoder.encode(gray);
+    final dart = encoder.encode(rgb);
     expect(dart.length, python.length);
     for (var i = 0; i < dart.length; i++) {
       expect(dart[i], closeTo(python[i], 1e-9), reason: 'component $i');
     }
     expect(Verifier.cosine(dart, Verifier.normalise(dart)), closeTo(1, 1e-12));
+  });
+
+  test('CNN input resize matches the Python pipeline', () {
+    final ref = expected['rgb_resize'] as Map<String, dynamic>;
+    final every = ref['every'] as int;
+    final python = (ref['values'] as List).cast<num>();
+    final dart = rgbResize(rgb, ref['size'] as int);
+    for (var i = 0; i < python.length; i++) {
+      expect(dart[i * every], closeTo(python[i].toDouble(), 1e-3), reason: 'value ${i * every}');
+    }
   });
 }

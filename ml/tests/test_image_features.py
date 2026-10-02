@@ -76,3 +76,14 @@ def test_near_duplicates_are_removed_within_but_not_across_animals():
     )
     kept = dataset.remove_near_duplicates(df, max_bits=2)
     assert kept["file"].tolist() == ["1", "3", "4"]
+
+
+def test_cnn_resize_matches_pil_bilinear_when_shrinking_and_enlarging():
+    from PIL import Image
+
+    rng = np.random.default_rng(2)
+    for shape in [(400, 520, 3), (90, 130, 3)]:
+        rgb = rng.integers(0, 256, size=shape).astype(np.uint8)
+        pil = np.asarray(Image.fromarray(rgb).resize((224, 224), Image.Resampling.BILINEAR))
+        # PIL rounds to 8-bit; ours stays in floats.
+        assert np.abs(imageops.rgb_resize(rgb, 224) - pil).max() <= 1.0

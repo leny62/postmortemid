@@ -47,6 +47,8 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pyright]
 include = ["ml/src", "ml/scripts", "ml/tests"]
+# Runs in its own pinned environment (uv run --script), so its imports are not installed here.
+exclude = ["ml/scripts/export_tflite.py"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 # pandas and OpenCV stubs return broad unions for ordinary indexing; keep these visible as warnings.

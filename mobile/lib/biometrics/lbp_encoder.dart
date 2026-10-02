@@ -21,8 +21,8 @@ final List<int> _uniformTable = () {
 
 /// Uniform LBP histogram descriptor. Mirrors ml/src/postmortemid/lbp.py.
 ///
-/// This is a demonstration encoder, not the research model. Its thresholds
-/// come from live public data, so its scores say nothing about post-mortem use.
+/// A training-free baseline, kept as a fallback encoder. It is not the
+/// research model.
 class LbpEncoder implements BiometricEncoder {
   const LbpEncoder({required this.modelVersion, this.size = 64, this.grid = 4});
 
@@ -37,7 +37,7 @@ class LbpEncoder implements BiometricEncoder {
   int get dim => grid * grid * 59;
 
   @override
-  Float64List encode(GrayImage image) => describeGray(graySquare(image, size));
+  Float64List encode(RgbImage image) => describeGray(graySquare(image.toGray(), size));
 
   Float64List describeGray(GrayImage g) {
     final n = g.width - 2;

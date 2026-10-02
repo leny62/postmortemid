@@ -19,21 +19,20 @@ class ImageAnalysis {
   bool get passed => issues.isEmpty;
 }
 
-GrayImage decodeGray(Uint8List bytes) {
+RgbImage decodeRgb(Uint8List bytes) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) throw const FormatException('unsupported image file');
   final upright = img.bakeOrientation(decoded).convert(numChannels: 3, format: img.Format.uint8);
-  final rgb = upright.getBytes(order: img.ChannelOrder.rgb);
-  return grayFromRgb(rgb, upright.width, upright.height);
+  return RgbImage(upright.width, upright.height, upright.getBytes(order: img.ChannelOrder.rgb));
 }
 
-ImageAnalysis analyse(GrayImage gray, QualityThresholds thresholds, BiometricEncoder encoder) {
-  final measures = measureQuality(gray);
+ImageAnalysis analyse(RgbImage image, QualityThresholds thresholds, BiometricEncoder encoder) {
+  final measures = measureQuality(image.toGray());
   final issues = qualityIssues(measures, thresholds);
   return ImageAnalysis(
     measures: measures,
     issues: issues,
-    embedding: issues.isEmpty ? encoder.encode(gray) : null,
+    embedding: issues.isEmpty ? encoder.encode(image) : null,
   );
 }
 
@@ -44,5 +43,5 @@ Future<ImageAnalysis> analyseFile(
   BiometricEncoder encoder,
 ) async {
   final bytes = await File(path).readAsBytes();
-  return compute((Uint8List b) => analyse(decodeGray(b), thresholds, encoder), bytes);
+  return compute((Uint8List b) => analyse(decodeRgb(b), thresholds, encoder), bytes);
 }

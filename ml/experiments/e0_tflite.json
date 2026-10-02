@@ -1,0 +1,29 @@
+{
+  "model_file": "pmid-mnv3-arcface-e0-v0.1.tflite",
+  "model_bytes": 14000808,
+  "input": {
+    "shape": [
+      1,
+      224,
+      224,
+      3
+    ],
+    "pixels": "RGB 0..255, whole image antialiased bilinear resize"
+  },
+  "tflite_vs_pytorch_min_cosine": 0.9999999403953552,
+  "tau_far1": 0.3990744948387146,
+  "tau_far01": 0.5414507985115051,
+  "test": {
+    "n_genuine": 454,
+    "n_impostor": 22700,
+    "roc_auc": 0.9926964427797939,
+    "eer": 0.02011013215859029,
+    "oracle_tar_at_far1": 0.9625550660792952,
+    "oracle_tar_at_far01": 0.8942731277533039,
+    "calibrated_tar_at_far1": 0.9625550660792952,
+    "realised_far_at_far1": 0.009427312775330397,
+    "calibrated_tar_at_far01": 0.9295154185022027,
+    "realised_far_at_far01": 0.001894273127753304
+  },
+  "rank1": 0.9691629955947136
+}

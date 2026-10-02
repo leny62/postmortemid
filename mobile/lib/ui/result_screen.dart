@@ -37,9 +37,13 @@ class ResultScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!isResearchModel)
+            if (isResearchModel)
               const _Note(
-                'This result comes from the demonstration encoder, not the research model.',
+                'This is the initial model, trained only on public images of live cattle.',
+              )
+            else
+              const _Note(
+                'This result comes from the LBP fallback encoder, not the research model.',
               ),
             _Note(calibration),
             if (postMortem)

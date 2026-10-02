@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'biometric_encoder.dart';
 import 'lbp_encoder.dart';
 import 'quality.dart';
+import 'tflite_encoder.dart';
 import 'verifier.dart';
 
-const manifestAsset = 'assets/model/manifest.json';
+const modelAssetDir = 'assets/model';
+const manifestAsset = '$modelAssetDir/manifest.json';
 
 /// Encoder, thresholds and quality limits exported by the research pipeline
 /// (ml/scripts/export_app_manifest.py). Replacing this file changes the model
@@ -22,7 +24,8 @@ class ModelManifest {
     required this.calibration,
   });
 
-  factory ModelManifest.fromJson(Map<String, dynamic> json) {
+  /// [modelBytes] is the encoder's model file, needed for the `tflite` type.
+  factory ModelManifest.fromJson(Map<String, dynamic> json, {Uint8List? modelBytes}) {
     final enc = json['encoder'] as Map<String, dynamic>;
     final thr = json['thresholds'] as Map<String, dynamic>;
     final BiometricEncoder encoder = switch (enc['type']) {
@@ -31,6 +34,13 @@ class ModelManifest {
         size: enc['size'] as int,
         grid: enc['grid'] as int,
       ),
+      'tflite' when modelBytes != null => TfliteEncoder(
+        modelVersion: enc['model_version'] as String,
+        modelBytes: modelBytes,
+        inputSize: enc['input_size'] as int,
+        embeddingDim: enc['embedding_dim'] as int,
+      ),
+      'tflite' => throw const FormatException('the tflite encoder needs its model file'),
       final other => throw FormatException('unsupported encoder type $other'),
     };
     return ModelManifest(
@@ -48,8 +58,14 @@ class ModelManifest {
   }
 
   static Future<ModelManifest> load([AssetBundle? bundle]) async {
-    final text = await (bundle ?? rootBundle).loadString(manifestAsset);
-    return ModelManifest.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    final assets = bundle ?? rootBundle;
+    final json = jsonDecode(await assets.loadString(manifestAsset)) as Map<String, dynamic>;
+    final file = (json['encoder'] as Map<String, dynamic>)['model_file'] as String?;
+    final bytes = file == null ? null : await assets.load('$modelAssetDir/$file');
+    return ModelManifest.fromJson(
+      json,
+      modelBytes: bytes?.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+    );
   }
 
   final BiometricEncoder encoder;

@@ -1,7 +1,7 @@
 """Write a synthetic test image and the values the Python pipeline computes for it.
 
 mobile/test/parity_test.dart checks that the Dart implementation gives the
-same quality measures and LBP descriptor. A synthetic PNG is used so the
+same quality measures, LBP descriptor and CNN input resize. A synthetic PNG is used so the
 test has no licensing constraints and no JPEG decoder differences.
 
     uv run python ml/scripts/export_parity_fixture.py
@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 
 from postmortemid import lbp, paths, quality
+from postmortemid.imageops import rgb_resize
 
 OUT = paths.REPO / "mobile" / "test" / "fixtures"
 
@@ -37,6 +38,12 @@ def main() -> None:
         "brightness": m.brightness,
         "sharpness": m.sharpness,
         "lbp": {"size": cfg.size, "grid": cfg.grid, "vector": lbp.describe(rgb, cfg).tolist()},
+        # Every 97th value of the CNN input, enough to catch any indexing or weighting slip.
+        "rgb_resize": {
+            "size": 224,
+            "every": 97,
+            "values": rgb_resize(rgb, 224).ravel()[::97].tolist(),
+        },
     }
     (OUT / "parity.json").write_text(json.dumps(expected))
     print(f"wrote {OUT / 'parity.png'} and parity.json")

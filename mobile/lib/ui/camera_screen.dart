@@ -1,8 +1,31 @@
-import 'package:camera/camera.dart';
-import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:math' as math;
 
-/// Guided capture (FR1): a square guide shows where the muzzle should be.
-/// The analysis uses the centre square of the photo, which is this guide area.
+import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
+
+/// Keeps only the centre square of a photo, the area inside the on-screen guide.
+/// Until a detector finds the muzzle, this is what makes a phone photo look
+/// like the muzzle crops the model was trained on.
+String cropToGuide(String path) {
+  final photo = img.bakeOrientation(img.decodeImage(File(path).readAsBytesSync())!);
+  final side = math.min(photo.width, photo.height);
+  final square = img.copyCrop(
+    photo,
+    x: (photo.width - side) ~/ 2,
+    y: (photo.height - side) ~/ 2,
+    width: side,
+    height: side,
+  );
+  final out = path.replaceFirst(RegExp(r'\.\w+$'), '_guide.jpg');
+  File(out).writeAsBytesSync(img.encodeJpg(square, quality: 95));
+  return out;
+}
+
+/// Guided capture (FR1): a square guide shows where the muzzle should be,
+/// and the saved image is cropped to that square.
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -54,7 +77,8 @@ class _CameraScreenState extends State<CameraScreen> {
     setState(() => _taking = true);
     try {
       final file = await controller.takePicture();
-      if (mounted) Navigator.of(context).pop(file.path);
+      final square = await compute(cropToGuide, file.path);
+      if (mounted) Navigator.of(context).pop(square);
     } on CameraException {
       if (mounted) setState(() => _taking = false);
     }
