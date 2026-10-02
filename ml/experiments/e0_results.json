@@ -1,0 +1,275 @@
+{
+  "experiment": "E0",
+  "description": "Public-data baseline: live-to-live verification on held-out public animals",
+  "data": {
+    "raw_identities": 268,
+    "raw_images": 4923,
+    "dropped_duplicate_identities": [
+      "cattle_2100",
+      "cattle_4451",
+      "cattle_5408",
+      "cattle_5508",
+      "cattle_6011",
+      "cattle_6283",
+      "cattle_8095"
+    ],
+    "near_duplicates_removed": 1429,
+    "split": {
+      "train": {
+        "animals": 157,
+        "images": 2047
+      },
+      "dev": {
+        "animals": 52,
+        "images": 738
+      },
+      "test": {
+        "animals": 52,
+        "images": 610
+      }
+    }
+  },
+  "config": {
+    "experiment": "E0",
+    "description": "Public-data baseline: live-to-live verification on held-out public animals",
+    "dataset": {
+      "name": "Xiong et al. (2022) beef cattle muzzle database",
+      "doi": "10.5281/zenodo.6324361",
+      "archive_sha256": "0a4b519f300e0d96727c60f4515fd8cb6e2c74eaaa1f6fdc43d23b8e44693c1c"
+    },
+    "split": {
+      "seed": 42,
+      "fractions": [
+        0.6,
+        0.2,
+        0.2
+      ]
+    },
+    "protocol": {
+      "k_enrol": 3,
+      "role_order": "capture"
+    },
+    "near_duplicate_max_bits": 2,
+    "image_cache_size": 256,
+    "train": {
+      "loss": "arcface",
+      "epochs": 15,
+      "batch_size": 48,
+      "lr": 0.0005,
+      "weight_decay": 0.0001,
+      "embedding_dim": 512,
+      "image_size": 224,
+      "arc_scale": 30.0,
+      "arc_margin": 0.3,
+      "seed": 42
+    },
+    "sift": {
+      "impostors_per_query": 10,
+      "seed": 11
+    },
+    "bootstrap": {
+      "n_resamples": 1000,
+      "seed": 0
+    },
+    "far_targets": [
+      0.01,
+      0.001
+    ],
+    "lbp_candidates": [
+      [
+        64,
+        4
+      ],
+      [
+        96,
+        4
+      ],
+      [
+        128,
+        4
+      ],
+      [
+        128,
+        8
+      ]
+    ],
+    "app": {
+      "model_version": "pmid-lbp-demo-v0.1",
+      "threshold_version": "e0-lbp-dev-v0.1",
+      "quality": {
+        "min_side": 256,
+        "min_brightness": 50,
+        "max_brightness": 220,
+        "min_sharpness": 15
+      }
+    }
+  },
+  "lbp_selected": {
+    "size": 64,
+    "grid": 4
+  },
+  "lbp_sweep_dev": [
+    {
+      "size": 64,
+      "grid": 4,
+      "dim": 944,
+      "dev ROC-AUC": 0.9432677677771549,
+      "dev EER": 0.10290748601846235,
+      "dev TAR@FAR1%": 0.8281786941580757
+    },
+    {
+      "size": 96,
+      "grid": 4,
+      "dim": 944,
+      "dev ROC-AUC": 0.9354700489565106,
+      "dev EER": 0.13189812007277135,
+      "dev TAR@FAR1%": 0.7869415807560137
+    },
+    {
+      "size": 128,
+      "grid": 4,
+      "dim": 944,
+      "dev ROC-AUC": 0.9301341065234209,
+      "dev EER": 0.145222693888552,
+      "dev TAR@FAR1%": 0.7680412371134021
+    },
+    {
+      "size": 128,
+      "grid": 8,
+      "dim": 3776,
+      "dev ROC-AUC": 0.9425108903518187,
+      "dev EER": 0.13749073512566537,
+      "dev TAR@FAR1%": 0.8006872852233677
+    }
+  ],
+  "results_test": [
+    {
+      "model": "SIFT",
+      "tau_far1": 10.000000000000002,
+      "tau_far01": 17.000000000000004,
+      "n_genuine": 454,
+      "n_impostor": 4540,
+      "roc_auc": 0.9683134739661161,
+      "eer": 0.07720264317180618,
+      "oracle_tar_at_far1": 0.8039647577092511,
+      "oracle_tar_at_far01": 0.7334801762114538,
+      "calibrated_tar_at_far1": 0.751101321585903,
+      "realised_far_at_far1": 0.001762114537444934,
+      "calibrated_tar_at_far01": 0.6784140969162996,
+      "realised_far_at_far01": 0.00022026431718061675,
+      "eer_ci": [
+        0.038122709879406295,
+        0.10189767558188609
+      ],
+      "calibrated_tar_at_far1_ci": [
+        0.6161742469341589,
+        0.8705097146772378
+      ]
+    },
+    {
+      "model": "LBP (on-device demo)",
+      "tau_far1": 0.9199322386761868,
+      "tau_far01": 0.9259521349857059,
+      "n_genuine": 454,
+      "n_impostor": 22700,
+      "roc_auc": 0.9361891362145587,
+      "eer": 0.1120044052863436,
+      "oracle_tar_at_far1": 0.8105726872246696,
+      "oracle_tar_at_far01": 0.7400881057268722,
+      "calibrated_tar_at_far1": 0.7841409691629956,
+      "realised_far_at_far1": 0.004977973568281938,
+      "calibrated_tar_at_far01": 0.7092511013215859,
+      "realised_far_at_far01": 0.0001762114537444934,
+      "eer_ci": [
+        0.06276943595620067,
+        0.1643099315068493
+      ],
+      "calibrated_tar_at_far1_ci": [
+        0.6923964056776557,
+        0.8676139597852341
+      ],
+      "rank1": 0.9251101321585903,
+      "open_set_rejection_at_far1": 0.8568281938325991
+    },
+    {
+      "model": "MobileNetV3 ImageNet (frozen)",
+      "tau_far1": 0.8127498626708984,
+      "tau_far01": 0.857308566570282,
+      "n_genuine": 454,
+      "n_impostor": 22700,
+      "roc_auc": 0.968194511828291,
+      "eer": 0.0661894273127753,
+      "oracle_tar_at_far1": 0.8898678414096917,
+      "oracle_tar_at_far01": 0.8612334801762115,
+      "calibrated_tar_at_far1": 0.8854625550660793,
+      "realised_far_at_far1": 0.005022026431718062,
+      "calibrated_tar_at_far01": 0.7995594713656388,
+      "realised_far_at_far01": 4.405286343612335e-05,
+      "eer_ci": [
+        0.0362632429037179,
+        0.10240172794117644
+      ],
+      "calibrated_tar_at_far1_ci": [
+        0.8214264998342724,
+        0.9414726905658318
+      ],
+      "rank1": 0.9251101321585903,
+      "open_set_rejection_at_far1": 0.801762114537445
+    },
+    {
+      "model": "MobileNetV3 softmax",
+      "tau_far1": 0.43405425548553467,
+      "tau_far01": 0.6215530037879944,
+      "n_genuine": 454,
+      "n_impostor": 22700,
+      "roc_auc": 0.9926368646781425,
+      "eer": 0.0248237885462555,
+      "oracle_tar_at_far1": 0.9581497797356828,
+      "oracle_tar_at_far01": 0.8766519823788547,
+      "calibrated_tar_at_far1": 0.9559471365638766,
+      "realised_far_at_far1": 0.008898678414096917,
+      "calibrated_tar_at_far01": 0.8854625550660793,
+      "realised_far_at_far01": 0.0012334801762114538,
+      "eer_ci": [
+        0.009455896824985748,
+        0.05748026589115082
+      ],
+      "calibrated_tar_at_far1_ci": [
+        0.9134085226957053,
+        0.9895641490400435
+      ],
+      "rank1": 0.960352422907489,
+      "open_set_rejection_at_far1": 0.6211453744493393
+    },
+    {
+      "model": "MobileNetV3 ArcFace (proposed)",
+      "tau_far1": 0.38963910937309265,
+      "tau_far01": 0.5361555218696594,
+      "n_genuine": 454,
+      "n_impostor": 22700,
+      "roc_auc": 0.9939876574356188,
+      "eer": 0.022334801762114512,
+      "oracle_tar_at_far1": 0.9691629955947136,
+      "oracle_tar_at_far01": 0.8986784140969163,
+      "calibrated_tar_at_far1": 0.9647577092511013,
+      "realised_far_at_far1": 0.008722466960352422,
+      "calibrated_tar_at_far01": 0.9317180616740088,
+      "realised_far_at_far01": 0.0017180616740088107,
+      "eer_ci": [
+        0.006544634843599376,
+        0.05543956756119834
+      ],
+      "calibrated_tar_at_far1_ci": [
+        0.9246942959001783,
+        0.9952339544291876
+      ],
+      "rank1": 0.9713656387665198,
+      "open_set_rejection_at_far1": 0.6475770925110133
+    }
+  ],
+  "environment": {
+    "python": "3.12.13",
+    "torch": "2.14.1",
+    "device": "mps"
+  }
+}
