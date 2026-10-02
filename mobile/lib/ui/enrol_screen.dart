@@ -44,7 +44,10 @@ class _EnrolScreenState extends State<EnrolScreen> {
           content: const Text('A new template will be created for this animal.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continue'),
+            ),
           ],
         ),
       );
@@ -60,9 +63,18 @@ class _EnrolScreenState extends State<EnrolScreen> {
 
   Future<void> _createTemplate() async {
     setState(() => _saving = true);
-    await _controller.createTemplate();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _controller.createTemplate();
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('The template could not be saved. Try again.')),
+      );
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text('Template saved for ${_controller.animal!.studyCode}')),
     );
     Navigator.of(context).pop();

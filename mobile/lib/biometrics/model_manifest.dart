@@ -31,8 +31,7 @@ class ModelManifest {
     final BiometricEncoder encoder = switch (enc['type']) {
       'lbp' => LbpEncoder(
         modelVersion: enc['model_version'] as String,
-        size: enc['size'] as int,
-        grid: enc['grid'] as int,
+        preprocessor: LbpDescriptor(size: enc['size'] as int, grid: enc['grid'] as int),
       ),
       'tflite' when modelBytes != null => TfliteEncoder(
         modelVersion: enc['model_version'] as String,

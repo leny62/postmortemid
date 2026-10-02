@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
+import 'package:postmortemid/biometrics/image_analysis.dart';
 import 'package:postmortemid/biometrics/image_ops.dart';
 import 'package:postmortemid/biometrics/model_manifest.dart';
 import 'package:postmortemid/biometrics/tflite_encoder.dart';
@@ -32,24 +35,48 @@ void main() {
     final encoder = manifest.encoder;
     expect(encoder, isA<TfliteEncoder>());
 
-    final image = syntheticRgb();
+    final input = encoder.preprocessor(syntheticRgb());
     final watch = Stopwatch()..start();
-    final first = encoder.encode(image);
+    final first = await encoder.embed(input);
     final firstMs = watch.elapsedMilliseconds;
 
     const runs = 10;
     watch.reset();
     for (var i = 0; i < runs; i++) {
-      encoder.encode(image);
+      await encoder.embed(input);
     }
-    final meanMs = watch.elapsedMilliseconds / runs;
+    final modelMs = watch.elapsedMilliseconds / runs;
+
+    // The full path the app takes for one photo: read, decode, quality check,
+    // resize in a background isolate, then the model. A 720 x 720 JPEG is the
+    // size of a camera photo cropped to the guide square.
+    final photo = img.copyResize(
+      img.Image.fromBytes(
+        width: 320,
+        height: 240,
+        bytes: syntheticRgb().pixels.buffer,
+        numChannels: 3,
+      ),
+      width: 720,
+      height: 720,
+    );
+    final file = File('${Directory.systemTemp.path}/pmid_timing.jpg')
+      ..writeAsBytesSync(img.encodeJpg(photo, quality: 95));
+    watch.reset();
+    for (var i = 0; i < 5; i++) {
+      final analysis = await analyseFile(file.path, manifest.quality, encoder);
+      expect(analysis.embedding, isNotNull);
+    }
+    final appMs = watch.elapsedMilliseconds / 5;
 
     final agreement = Verifier.cosine(first, Float64List.fromList(expectedEmbedding));
     final modelMb = (encoder as TfliteEncoder).modelBytes.lengthInBytes / 1e6;
     // ignore: avoid_print
     print(
       'ON_DEVICE model=${encoder.modelVersion} size_mb=${modelMb.toStringAsFixed(1)} '
-      'first_ms=$firstMs mean_ms=${meanMs.toStringAsFixed(1)} cosine_vs_laptop=${agreement.toStringAsFixed(6)}',
+      'first_ms=$firstMs model_ms=${modelMs.toStringAsFixed(1)} '
+      'photo_to_embedding_ms=${appMs.toStringAsFixed(0)} '
+      'cosine_vs_laptop=${agreement.toStringAsFixed(6)}',
     );
     expect(agreement, greaterThan(0.999));
   });

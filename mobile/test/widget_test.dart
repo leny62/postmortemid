@@ -45,13 +45,15 @@ void main() {
 
   tearDown(() => tmp.delete(recursive: true));
 
-  testWidgets('home shows prototype status and the three actions', (tester) async {
+  testWidgets('home shows prototype status and the four actions', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(PostMortemIdApp(services: services));
     expect(find.text('PostMortemID'), findsOneWidget);
     expect(find.text('Test build.'), findsOneWidget);
     expect(find.text('test-encoder-v0'), findsOneWidget);
     expect(find.text('test-thresholds-v0'), findsOneWidget);
-    for (final action in ['Enrol', 'Verify', 'History']) {
+    for (final action in ['Enrol', 'Verify', 'History', 'Export data']) {
       expect(find.text(action), findsOneWidget);
     }
   });
@@ -173,5 +175,35 @@ void main() {
     expect(find.text('Review'), findsOneWidget);
     expect(find.textContaining('Score 0.850'), findsOneWidget);
     expect(find.textContaining('test-encoder-v0'), findsOneWidget);
+  });
+
+  testWidgets('a result from another model says so instead of showing this model\'s notes', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      wrap(
+        ResultScreen(
+          outcome: outcome(0.95, Decision.match),
+          isResearchModel: null,
+          calibration: null,
+        ),
+      ),
+    );
+    expect(find.textContaining('not the model in this version of the app'), findsOneWidget);
+    expect(find.textContaining('LBP fallback encoder'), findsNothing);
+    expect(find.textContaining('initial model'), findsNothing);
+  });
+
+  testWidgets('a score beyond the zoomed scale is drawn as an arrow at that end', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        const Scaffold(
+          body: SizedBox(width: 300, child: ScoreScale(score: 0.99, tauFar1: 0.4, tauFar01: 0.5)),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.east), findsOneWidget);
   });
 }

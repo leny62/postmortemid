@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../biometrics/verifier.dart';
@@ -40,17 +42,42 @@ class LocalRepository {
     'started_at': s.startedAt.toIso8601String(),
   });
 
-  Future<int> addImage(CapturedImage i) => _db.insert('images', {
-    'session_id': i.sessionId,
-    'path': i.path,
-    'quality_passed': i.qualityPassed ? 1 : 0,
-    'quality_issues': i.qualityIssues.join(','),
-    'width': i.width,
-    'height': i.height,
-    'brightness': i.brightness,
-    'sharpness': i.sharpness,
-    'captured_at': i.capturedAt.toIso8601String(),
+  /// Written before analysis so a capture is on record even if analysis fails (NFR5).
+  Future<int> addPendingImage(int sessionId, String path) => _db.insert('images', {
+    'session_id': sessionId,
+    'path': path,
+    'quality_passed': 0,
+    'quality_issues': '',
+    'width': 0,
+    'height': 0,
+    'brightness': 0,
+    'sharpness': 0,
+    'captured_at': DateTime.now().toIso8601String(),
+    'analysed': 0,
   });
+
+  Future<void> completeImage(
+    int id, {
+    required bool qualityPassed,
+    required List<String> qualityIssues,
+    required int width,
+    required int height,
+    required double brightness,
+    required double sharpness,
+  }) => _db.update(
+    'images',
+    {
+      'quality_passed': qualityPassed ? 1 : 0,
+      'quality_issues': qualityIssues.join(','),
+      'width': width,
+      'height': height,
+      'brightness': brightness,
+      'sharpness': sharpness,
+      'analysed': 1,
+    },
+    where: 'id = ?',
+    whereArgs: [id],
+  );
 
   Future<int> addTemplate(BiometricTemplate t) => _db.insert('templates', {
     'animal_id': t.animalId,
@@ -129,4 +156,69 @@ class LocalRepository {
         ),
     ];
   }
+
+  /// Writes every table as CSV into [dir] (FR3). Ear tags stay out of the
+  /// export, and templates are listed without their embedding vectors.
+  Future<List<File>> exportCsv(Directory dir) async {
+    await dir.create(recursive: true);
+    final files = <File>[];
+    for (final (table, columns) in _exportColumns) {
+      final rows = await _db.query(table, columns: columns, orderBy: 'id');
+      final lines = [
+        columns.join(','),
+        for (final r in rows) columns.map((c) => _csvField(r[c])).join(','),
+      ];
+      final file = File(p.join(dir.path, '$table.csv'));
+      await file.writeAsString('${lines.join('\n')}\n');
+      files.add(file);
+    }
+    return files;
+  }
+}
+
+const _exportColumns = [
+  ('animals', ['id', 'study_code', 'linkage_status', 'created_at']),
+  (
+    'capture_sessions',
+    ['id', 'animal_id', 'time_point', 'modality', 'purpose', 'device_model', 'started_at'],
+  ),
+  (
+    'images',
+    [
+      'id',
+      'session_id',
+      'path',
+      'analysed',
+      'quality_passed',
+      'quality_issues',
+      'width',
+      'height',
+      'brightness',
+      'sharpness',
+      'captured_at',
+    ],
+  ),
+  ('templates', ['id', 'animal_id', 'model_version', 'image_count', 'created_at']),
+  (
+    'verifications',
+    [
+      'id',
+      'template_id',
+      'query_image_id',
+      'similarity',
+      'tau_far1',
+      'tau_far01',
+      'decision',
+      'model_version',
+      'threshold_version',
+      'app_version',
+      'created_at',
+    ],
+  ),
+];
+
+String _csvField(Object? value) {
+  final text = value?.toString() ?? '';
+  if (!text.contains(RegExp('[",\n]'))) return text;
+  return '"${text.replaceAll('"', '""')}"';
 }

@@ -18,6 +18,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final docs = await getApplicationDocumentsDirectory();
   final imagesDir = await Directory(p.join(docs.path, 'images')).create(recursive: true);
+  // App-specific external storage, so exports can be copied off with adb pull or a file manager.
+  final external = await getExternalStorageDirectory() ?? docs;
   final db = await openStudyDatabase(p.join(await getDatabasesPath(), 'postmortemid.db'));
   final package = await PackageInfo.fromPlatform();
 
@@ -25,6 +27,7 @@ Future<void> main() async {
     repository: LocalRepository(db),
     manifest: await ModelManifest.load(),
     imagesDir: imagesDir,
+    exportsDir: Directory(p.join(external.path, 'exports')),
     deviceModel: await _deviceModel(),
     appVersion: '${package.version}+${package.buildNumber}',
   );

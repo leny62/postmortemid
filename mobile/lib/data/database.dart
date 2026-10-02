@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
-const schemaVersion = 1;
+const schemaVersion = 2;
 
 const _schema = [
   '''
@@ -32,7 +32,8 @@ const _schema = [
     height INTEGER NOT NULL,
     brightness REAL NOT NULL,
     sharpness REAL NOT NULL,
-    captured_at TEXT NOT NULL
+    captured_at TEXT NOT NULL,
+    analysed INTEGER NOT NULL DEFAULT 0
   )''',
   '''
   CREATE TABLE templates (
@@ -68,6 +69,12 @@ Future<Database> openStudyDatabase(String path, {DatabaseFactory? factory}) {
       onCreate: (db, _) async {
         for (final statement in _schema) {
           await db.execute(statement);
+        }
+      },
+      onUpgrade: (db, from, _) async {
+        // Version 1 wrote image rows only after analysis, so every existing row is analysed.
+        if (from < 2) {
+          await db.execute('ALTER TABLE images ADD COLUMN analysed INTEGER NOT NULL DEFAULT 1');
         }
       },
     ),

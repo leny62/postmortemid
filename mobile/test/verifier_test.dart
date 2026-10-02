@@ -31,9 +31,6 @@ void main() {
   });
 
   test('embeddings of different sizes are rejected', () {
-    expect(
-      () => Verifier.cosine(Float64List(3), Float64List(4)),
-      throwsArgumentError,
-    );
+    expect(() => Verifier.cosine(Float64List(3), Float64List(4)), throwsArgumentError);
   });
 }

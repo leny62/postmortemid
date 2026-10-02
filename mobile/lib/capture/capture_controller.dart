@@ -17,6 +17,7 @@ class AppServices {
     required this.repository,
     required this.manifest,
     required this.imagesDir,
+    required this.exportsDir,
     required this.deviceModel,
     required this.appVersion,
     Analyser? analyser,
@@ -25,12 +26,21 @@ class AppServices {
   final LocalRepository repository;
   final ModelManifest manifest;
   final Directory imagesDir;
+  final Directory exportsDir;
   final String deviceModel;
   final String appVersion;
   final Analyser analyser;
 
   Verifier get verifier => Verifier(manifest.thresholds);
   String get modelVersion => manifest.encoder.modelVersion;
+
+  /// Writes the study records as CSV into a new timestamped folder and returns it.
+  Future<Directory> exportData() async {
+    final stamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+    final dir = Directory(p.join(exportsDir.path, 'export_$stamp'));
+    await repository.exportCsv(dir);
+    return dir;
+  }
 }
 
 enum ItemState { analysing, passed, failed }
@@ -41,12 +51,19 @@ class CaptureItem {
   final String path;
   ItemState state = ItemState.analysing;
   List<QualityIssue> issues = const [];
+
+  /// Set when the image failed for a reason other than a quality issue.
+  String? message;
   ImageAnalysis? analysis;
   int? imageId;
 }
 
 class VerificationOutcome {
-  const VerificationOutcome({required this.record, required this.studyCode, required this.timePoint});
+  const VerificationOutcome({
+    required this.record,
+    required this.studyCode,
+    required this.timePoint,
+  });
 
   final VerificationRecord record;
   final String studyCode;
@@ -62,7 +79,6 @@ class CaptureController extends ChangeNotifier {
   Animal? animal;
   int? _sessionId;
   TimePoint? _timePoint;
-  String? error;
 
   List<CaptureItem> get passedItems => items.where((i) => i.state == ItemState.passed).toList();
   bool get busy => items.any((i) => i.state == ItemState.analysing);
@@ -119,29 +135,32 @@ class CaptureController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      item.imageId = await _services.repository.addPendingImage(_sessionId!, saved.path);
       final analysis = await _services.analyser(saved.path);
+      await _services.repository.completeImage(
+        item.imageId!,
+        qualityPassed: analysis.passed,
+        qualityIssues: analysis.issues.map((i) => i.name).toList(),
+        width: analysis.measures.width,
+        height: analysis.measures.height,
+        brightness: analysis.measures.brightness,
+        sharpness: analysis.measures.sharpness,
+      );
       item
         ..analysis = analysis
         ..issues = analysis.issues
         ..state = analysis.passed ? ItemState.passed : ItemState.failed;
-      item.imageId = await _services.repository.addImage(
-        CapturedImage(
-          sessionId: _sessionId!,
-          path: saved.path,
-          qualityPassed: analysis.passed,
-          qualityIssues: analysis.issues.map((i) => i.name).toList(),
-          width: analysis.measures.width,
-          height: analysis.measures.height,
-          brightness: analysis.measures.brightness,
-          sharpness: analysis.measures.sharpness,
-          capturedAt: DateTime.now(),
-        ),
-      );
     } on FormatException {
       item
         ..state = ItemState.failed
-        ..issues = const [];
-      error = 'This file could not be read as an image.';
+        ..issues = const []
+        ..message = 'This file could not be read as an image.';
+    } catch (_) {
+      // The file and its pending row stay on record for later inspection.
+      item
+        ..state = ItemState.failed
+        ..issues = const []
+        ..message = 'The image could not be analysed. Please try again.';
     }
     notifyListeners();
     return item;
@@ -196,6 +215,10 @@ class CaptureController extends ChangeNotifier {
     );
     // Saved before it is shown, as in the proposal's sequence diagram (Figure 9).
     await _services.repository.addVerification(record);
-    return VerificationOutcome(record: record, studyCode: animal!.studyCode, timePoint: _timePoint!);
+    return VerificationOutcome(
+      record: record,
+      studyCode: animal!.studyCode,
+      timePoint: _timePoint!,
+    );
   }
 }

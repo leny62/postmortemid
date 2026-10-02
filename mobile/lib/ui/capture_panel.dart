@@ -78,7 +78,9 @@ class CaptureItemTile extends StatelessWidget {
       ItemState.failed => (Icons.error, const Color(0xFFB3261E), 'Please capture again'),
     };
     final reasons = item.issues.map((i) => i.message).join('\n');
-    final failedText = reasons.isEmpty ? 'This file could not be read as an image.' : reasons;
+    final failedText = reasons.isEmpty
+        ? item.message ?? 'This file could not be read as an image.'
+        : reasons;
     return Card.outlined(
       child: Padding(
         padding: const EdgeInsets.all(12),

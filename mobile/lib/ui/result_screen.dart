@@ -15,8 +15,10 @@ class ResultScreen extends StatelessWidget {
   });
 
   final VerificationOutcome outcome;
-  final bool isResearchModel;
-  final String calibration;
+
+  /// Null when the result was made by a model other than the one in this build.
+  final bool? isResearchModel;
+  final String? calibration;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,11 @@ class ResultScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Verification result')),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: [VerificationResultView(outcome: outcome), const SizedBox(height: 16), _caveats()],
+        children: [
+          VerificationResultView(outcome: outcome),
+          const SizedBox(height: 16),
+          _caveats(),
+        ],
       ),
     );
   }
@@ -37,7 +43,12 @@ class ResultScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isResearchModel)
+            if (isResearchModel == null)
+              _Note(
+                'This result was made with ${outcome.record.modelVersion}, which is not the model '
+                'in this version of the app.',
+              )
+            else if (isResearchModel!)
               const _Note(
                 'This is the initial model, trained only on public images of live cattle.',
               )
@@ -45,12 +56,14 @@ class ResultScreen extends StatelessWidget {
               const _Note(
                 'This result comes from the LBP fallback encoder, not the research model.',
               ),
-            _Note(calibration),
+            if (calibration != null) _Note(calibration!),
             if (postMortem)
               const _Note(
                 'Post-mortem verification has not been evaluated yet. This score is not evidence that the muzzle identifies the animal after death.',
               ),
-            const _Note('This result supports a person\'s decision. It is not a final identity decision.'),
+            const _Note(
+              'This result supports a person\'s decision. It is not a final identity decision.',
+            ),
           ],
         ),
       ),
@@ -159,37 +172,51 @@ class ScoreScale extends StatelessWidget {
     final lo = (tauFar1 - 2 * span).clamp(-1.0, 1.0);
     final hi = (tauFar01 + 2 * span).clamp(-1.0, 1.0);
     double pos(double v) => ((v - lo) / (hi - lo)).clamp(0.0, 1.0);
+    final above = score > hi, below = score < lo;
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        final w = box.maxWidth;
-        return SizedBox(
-          height: 44,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                top: 14,
-                left: 0,
-                right: 0,
-                height: 14,
-                child: Row(
-                  children: [
-                    _band(Decision.noMatch, pos(tauFar1)),
-                    _band(Decision.review, pos(tauFar01) - pos(tauFar1)),
-                    _band(Decision.match, 1 - pos(tauFar01)),
-                  ],
+    return Semantics(
+      label:
+          'Score ${score.toStringAsFixed(3)}. No match below ${tauFar1.toStringAsFixed(3)}, '
+          'match at or above ${tauFar01.toStringAsFixed(3)}.',
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          return SizedBox(
+            height: 44,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: 14,
+                  left: 0,
+                  right: 0,
+                  height: 14,
+                  child: Row(
+                    children: [
+                      _band(Decision.noMatch, pos(tauFar1)),
+                      _band(Decision.review, pos(tauFar01) - pos(tauFar1)),
+                      _band(Decision.match, 1 - pos(tauFar01)),
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: (pos(score) * w - 2).clamp(0, w - 4),
-                top: 6,
-                child: Container(width: 4, height: 30, color: Colors.black87),
-              ),
-            ],
-          ),
-        );
-      },
+                // A score beyond the zoomed range is drawn as an arrow at that end.
+                if (above || below)
+                  Positioned(
+                    left: above ? w - 28 : 0,
+                    top: 7,
+                    child: Icon(above ? Icons.east : Icons.west, size: 28, color: Colors.black87),
+                  )
+                else
+                  Positioned(
+                    left: (pos(score) * w - 2).clamp(0, w - 4),
+                    top: 6,
+                    child: Container(width: 4, height: 30, color: Colors.black87),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

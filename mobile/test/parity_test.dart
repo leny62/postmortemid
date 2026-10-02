@@ -25,13 +25,9 @@ void main() {
 
   test('LBP descriptor matches the Python pipeline', () {
     final lbp = expected['lbp'] as Map<String, dynamic>;
-    final encoder = LbpEncoder(
-      modelVersion: 'test',
-      size: lbp['size'] as int,
-      grid: lbp['grid'] as int,
-    );
+    final descriptor = LbpDescriptor(size: lbp['size'] as int, grid: lbp['grid'] as int);
     final python = (lbp['vector'] as List).cast<num>().map((v) => v.toDouble()).toList();
-    final dart = encoder.encode(rgb);
+    final dart = descriptor(rgb);
     expect(dart.length, python.length);
     for (var i = 0; i < dart.length; i++) {
       expect(dart[i], closeTo(python[i], 1e-9), reason: 'component $i');

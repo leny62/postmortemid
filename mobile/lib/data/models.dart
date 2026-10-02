@@ -72,32 +72,6 @@ class CaptureSession {
   final DateTime startedAt;
 }
 
-class CapturedImage {
-  const CapturedImage({
-    this.id,
-    required this.sessionId,
-    required this.path,
-    required this.qualityPassed,
-    required this.qualityIssues,
-    required this.width,
-    required this.height,
-    required this.brightness,
-    required this.sharpness,
-    required this.capturedAt,
-  });
-
-  final int? id;
-  final int sessionId;
-  final String path;
-  final bool qualityPassed;
-  final List<String> qualityIssues;
-  final int width;
-  final int height;
-  final double brightness;
-  final double sharpness;
-  final DateTime capturedAt;
-}
-
 class BiometricTemplate {
   const BiometricTemplate({
     this.id,

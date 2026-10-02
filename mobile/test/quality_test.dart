@@ -41,10 +41,7 @@ void main() {
       qualityIssues(measureQuality(flat(512, 512, 250)), thresholds),
       containsAll([QualityIssue.tooBright]),
     );
-    expect(
-      qualityIssues(measureQuality(checker(200, 300)), thresholds),
-      [QualityIssue.tooSmall],
-    );
+    expect(qualityIssues(measureQuality(checker(200, 300)), thresholds), [QualityIssue.tooSmall]);
   });
 
   test('messages are plain language without numbers', () {

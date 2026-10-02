@@ -48,6 +48,7 @@ Future<AppServices> testServices(Directory dir, Map<String, List<double>> embedd
     repository: await fileRepository(dir),
     manifest: testManifest,
     imagesDir: dir,
+    exportsDir: Directory('${dir.path}/exports'),
     deviceModel: 'Test Phone',
     appVersion: '0.1.0+test',
     analyser: (path) async => fakeAnalysis(path, embeddings),

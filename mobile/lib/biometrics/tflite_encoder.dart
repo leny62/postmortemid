@@ -5,36 +5,52 @@ import 'package:flutter_litert/flutter_litert.dart';
 import 'biometric_encoder.dart';
 import 'image_ops.dart';
 
+/// Whole image resized to inputSize x inputSize, raw RGB 0..255. Normalisation
+/// is inside the exported model.
+class CnnInput implements Preprocessor {
+  const CnnInput(this.inputSize);
+
+  final int inputSize;
+
+  @override
+  Float32List call(RgbImage image) => rgbResize(image, inputSize);
+}
+
 /// MobileNetV3-Large embedding network trained with ArcFace, exported by
-/// ml/scripts/export_tflite.py. Normalisation is inside the model, so the
-/// input is the whole image resized to inputSize, as raw RGB 0..255.
+/// ml/scripts/export_tflite.py.
 class TfliteEncoder implements BiometricEncoder {
   TfliteEncoder({
     required this.modelVersion,
     required this.modelBytes,
-    required this.inputSize,
+    required int inputSize,
     required this.embeddingDim,
-  });
+  }) : preprocessor = CnnInput(inputSize);
 
   @override
   final String modelVersion;
   final Uint8List modelBytes;
-  final int inputSize;
   final int embeddingDim;
 
-  // Created on first use in whichever isolate runs the encoder; an
-  // interpreter cannot be sent between isolates, but the model bytes can.
-  Interpreter? _interpreter;
+  @override
+  final CnnInput preprocessor;
+
+  // One interpreter for the life of the app, run on its own isolate so the UI
+  // stays responsive. Building one per image would copy and leak the model.
+  Future<IsolateInterpreter>? _runner;
 
   @override
   bool get isResearchModel => true;
 
+  Future<IsolateInterpreter> _start() async {
+    final interpreter = Interpreter.fromBuffer(modelBytes);
+    return IsolateInterpreter.create(address: interpreter.address);
+  }
+
   @override
-  Float64List encode(RgbImage image) {
-    final interpreter = _interpreter ??= Interpreter.fromBuffer(modelBytes);
-    final input = rgbResize(image, inputSize).reshape([1, inputSize, inputSize, 3]);
-    final output = [List<double>.filled(embeddingDim, 0)];
-    interpreter.run(input, output);
-    return Float64List.fromList(output.first);
+  Future<Float64List> embed(TypedData input) async {
+    final runner = await (_runner ??= _start());
+    final output = Float32List(embeddingDim);
+    await runner.run(input, output);
+    return Float64List.fromList(output);
   }
 }

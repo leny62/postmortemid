@@ -43,6 +43,12 @@ class HomeScreen extends StatelessWidget {
             subtitle: 'Past verification results stored on this phone',
             onTap: () => open(HistoryScreen(services: services)),
           ),
+          _ActionTile(
+            icon: Icons.file_download_outlined,
+            title: 'Export data',
+            subtitle: 'Save all study records as CSV files on this phone',
+            onTap: () => _export(context),
+          ),
           const SizedBox(height: 16),
           Text(
             'Works offline. Images and results are stored only on this phone.',
@@ -52,6 +58,16 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _export(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final dir = await services.exportData();
+      messenger.showSnackBar(SnackBar(content: Text('Exported to ${dir.path}')));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('The export failed. Try again.')));
+    }
   }
 }
 
@@ -103,7 +119,9 @@ class _InfoRow extends StatelessWidget {
     child: Row(
       children: [
         SizedBox(width: 96, child: Text(label, style: Theme.of(context).textTheme.labelMedium)),
-        Expanded(child: Text(value, style: const TextStyle(fontFamily: 'monospace'))),
+        Expanded(
+          child: Text(value, style: const TextStyle(fontFamily: 'monospace')),
+        ),
       ],
     ),
   );

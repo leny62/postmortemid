@@ -31,20 +31,55 @@ class _VerifyScreenState extends State<VerifyScreen> {
   }
 
   Future<void> _start() async {
+    if (_timePoint != TimePoint.t0 && !await _confirmPostMortem()) return;
     await _controller.startVerification(_claimed!, _timePoint!);
     setState(() => _started = true);
   }
 
+  /// Images are stored under the chosen time point, so a live image filed as
+  /// P0 or P1 would corrupt the study data.
+  Future<bool> _confirmPostMortem() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Record as ${_timePoint!.code}?'),
+        content: const Text(
+          'Use P0 or P1 only for images of the animal after slaughter. '
+          'Images of a live animal belong to T0.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Record as ${_timePoint!.code}'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _verify() async {
     setState(() => _running = true);
-    final outcome = await _controller.verify(_controller.passedItems.last);
+    final messenger = ScaffoldMessenger.of(context);
+    final VerificationOutcome outcome;
+    try {
+      outcome = await _controller.verify(_controller.passedItems.last);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Verification could not be completed. Try again.')),
+      );
+      if (mounted) setState(() => _running = false);
+      return;
+    }
     if (!mounted) return;
+    final manifest = widget.services.manifest;
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => ResultScreen(
           outcome: outcome,
-          isResearchModel: widget.services.manifest.encoder.isResearchModel,
-          calibration: widget.services.manifest.calibration,
+          isResearchModel: manifest.encoder.isResearchModel,
+          calibration: manifest.calibration,
         ),
       ),
     );
@@ -95,10 +130,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
                     ? null
                     : (s) => setState(() => _timePoint = s.isEmpty ? null : s.first),
               ),
-              if (_timePoint != null) ...[
-                const SizedBox(height: 4),
-                Text(_timePoint!.label),
-              ],
+              if (_timePoint != null) ...[const SizedBox(height: 4), Text(_timePoint!.label)],
               const SizedBox(height: 16),
               if (!_started)
                 FilledButton(

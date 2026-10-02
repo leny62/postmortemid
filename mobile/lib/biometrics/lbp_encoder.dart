@@ -20,24 +20,16 @@ final List<int> _uniformTable = () {
 }();
 
 /// Uniform LBP histogram descriptor. Mirrors ml/src/postmortemid/lbp.py.
-///
-/// A training-free baseline, kept as a fallback encoder. It is not the
-/// research model.
-class LbpEncoder implements BiometricEncoder {
-  const LbpEncoder({required this.modelVersion, this.size = 64, this.grid = 4});
+class LbpDescriptor implements Preprocessor {
+  const LbpDescriptor({this.size = 64, this.grid = 4});
 
-  @override
-  final String modelVersion;
   final int size;
   final int grid;
-
-  @override
-  bool get isResearchModel => false;
 
   int get dim => grid * grid * 59;
 
   @override
-  Float64List encode(RgbImage image) => describeGray(graySquare(image.toGray(), size));
+  Float64List call(RgbImage image) => describeGray(graySquare(image.toGray(), size));
 
   Float64List describeGray(GrayImage g) {
     final n = g.width - 2;
@@ -79,4 +71,21 @@ class LbpEncoder implements BiometricEncoder {
     }
     return vec;
   }
+}
+
+/// A training-free baseline, kept as a fallback encoder. It is not the
+/// research model. The whole descriptor is computed in the analysis isolate.
+class LbpEncoder implements BiometricEncoder {
+  const LbpEncoder({required this.modelVersion, this.preprocessor = const LbpDescriptor()});
+
+  @override
+  final String modelVersion;
+  @override
+  final LbpDescriptor preprocessor;
+
+  @override
+  bool get isResearchModel => false;
+
+  @override
+  Future<Float64List> embed(TypedData input) async => input as Float64List;
 }

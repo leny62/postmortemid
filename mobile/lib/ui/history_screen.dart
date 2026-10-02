@@ -35,22 +35,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
           return ListView.separated(
             itemCount: entries.length,
             separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, i) => HistoryTile(
-              entry: entries[i],
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => ResultScreen(
-                    outcome: VerificationOutcome(
-                      record: entries[i].record,
-                      studyCode: entries[i].studyCode,
-                      timePoint: entries[i].timePoint,
+            itemBuilder: (context, i) {
+              final entry = entries[i];
+              final manifest = widget.services.manifest;
+              // The model notes describe the model in this build, so they are
+              // shown only for results that model produced.
+              final current = entry.record.modelVersion == manifest.encoder.modelVersion;
+              return HistoryTile(
+                entry: entry,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ResultScreen(
+                      outcome: VerificationOutcome(
+                        record: entry.record,
+                        studyCode: entry.studyCode,
+                        timePoint: entry.timePoint,
+                      ),
+                      isResearchModel: current ? manifest.encoder.isResearchModel : null,
+                      calibration: current ? manifest.calibration : null,
                     ),
-                    isResearchModel: widget.services.manifest.encoder.isResearchModel,
-                    calibration: widget.services.manifest.calibration,
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),

@@ -6,8 +6,7 @@ import 'dart:typed_data';
 /// The operations in this file mirror ml/src/postmortemid/imageops.py so the
 /// phone and the research pipeline compute the same numbers.
 class GrayImage {
-  GrayImage(this.width, this.height, this.pixels)
-    : assert(pixels.length == width * height);
+  GrayImage(this.width, this.height, this.pixels) : assert(pixels.length == width * height);
 
   final int width;
   final int height;

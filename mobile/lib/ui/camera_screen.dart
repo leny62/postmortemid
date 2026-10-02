@@ -79,8 +79,12 @@ class _CameraScreenState extends State<CameraScreen> {
       final file = await controller.takePicture();
       final square = await compute(cropToGuide, file.path);
       if (mounted) Navigator.of(context).pop(square);
-    } on CameraException {
-      if (mounted) setState(() => _taking = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _taking = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('The photo could not be taken. Try again.')));
     }
   }
 
