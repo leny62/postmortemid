@@ -14,9 +14,17 @@ def _split(scores: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     return genuine, impostor
 
 
-def roc_auc(genuine: np.ndarray, impostor: np.ndarray) -> float:
+def roc_auc(
+    genuine: np.ndarray,
+    impostor: np.ndarray,
+    genuine_weight: np.ndarray | None = None,
+    impostor_weight: np.ndarray | None = None,
+) -> float:
     y = np.r_[np.ones(len(genuine)), np.zeros(len(impostor))]
-    return float(roc_auc_score(y, np.r_[genuine, impostor]))
+    weight = None
+    if genuine_weight is not None and impostor_weight is not None:
+        weight = np.r_[genuine_weight, impostor_weight]
+    return float(roc_auc_score(y, np.r_[genuine, impostor], sample_weight=weight))
 
 
 def eer(
@@ -105,18 +113,58 @@ def bootstrap_ci(
     Ratha and Pankanti, 2004). statistic receives genuine scores, impostor
     scores and their weights.
     """
-    animals = sorted(set(scores["query_identity"]) | set(scores["template_identity"]))
-    query = pd.Categorical(scores["query_identity"], categories=animals).codes
-    template = pd.Categorical(scores["template_identity"], categories=animals).codes
-    genuine = scores["genuine"].to_numpy(dtype=bool)
-    score = scores["score"].to_numpy()
+    values = _resampled_stats([scores], lambda s: s[0], statistic, n_resamples, seed)
+    alpha = (1 - level) / 2
+    lo, hi = np.quantile(values, [alpha, 1 - alpha])
+    return float(lo), float(hi)
+
+
+def paired_bootstrap_ci(
+    tables: list[pd.DataFrame],
+    combine: Callable[[list[float]], float],
+    statistic: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], float],
+    n_resamples: int = 2000,
+    seed: int = 0,
+    level: float = 0.95,
+) -> tuple[float, float]:
+    """CI of combine([statistic(t) for t in tables]) with one animal draw shared by all tables.
+
+    Sharing the draw keeps differences between conditions paired by animal.
+    """
+    values = _resampled_stats(tables, combine, statistic, n_resamples, seed)
+    alpha = (1 - level) / 2
+    lo, hi = np.quantile(values, [alpha, 1 - alpha])
+    return float(lo), float(hi)
+
+
+def _resampled_stats(
+    tables: list[pd.DataFrame],
+    combine: Callable[[list[float]], float],
+    statistic: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], float],
+    n_resamples: int,
+    seed: int,
+) -> list[float]:
+    animals = sorted(
+        set().union(*(set(t["query_identity"]) | set(t["template_identity"]) for t in tables))
+    )
+    prepared = []
+    for t in tables:
+        prepared.append(
+            (
+                pd.Categorical(t["query_identity"], categories=animals).codes,
+                pd.Categorical(t["template_identity"], categories=animals).codes,
+                t["genuine"].to_numpy(dtype=bool),
+                t["score"].to_numpy(),
+            )
+        )
     rng = np.random.default_rng(seed)
     values = []
     for _ in range(n_resamples):
         drawn = np.bincount(rng.integers(len(animals), size=len(animals)), minlength=len(animals))
-        weight = np.where(genuine, drawn[query], drawn[query] * drawn[template]).astype(float)
-        g, i = genuine & (weight > 0), ~genuine & (weight > 0)
-        values.append(statistic(score[g], score[i], weight[g], weight[i]))
-    alpha = (1 - level) / 2
-    lo, hi = np.quantile(values, [alpha, 1 - alpha])
-    return float(lo), float(hi)
+        stats = []
+        for query, template, genuine, score in prepared:
+            weight = np.where(genuine, drawn[query], drawn[query] * drawn[template]).astype(float)
+            g, i = genuine & (weight > 0), ~genuine & (weight > 0)
+            stats.append(statistic(score[g], score[i], weight[g], weight[i]))
+        values.append(combine(stats))
+    return values

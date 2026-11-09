@@ -25,3 +25,6 @@ ml/artifacts/
 .vscode/
 *.iml
 .DS_Store
+
+# Abattoir pilot images (identifiable study data, never committed)
+ml/data/field/
