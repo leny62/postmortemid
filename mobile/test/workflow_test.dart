@@ -185,25 +185,31 @@ void main() {
       'verifications.csv',
     });
     final animals = File('${dir.path}/animals.csv').readAsStringSync();
-    expect(animals, startsWith('id,study_code,linkage_status,created_at\n'));
+    expect(animals, startsWith('id,study_code,linkage_status,created_at,slaughter_time,'));
     expect(animals, contains('PM-0007'));
     expect(animals, isNot(contains('RW-TAG-123')));
     expect(imageRows(dir), hasLength(3));
   });
 
-  test('a version 1 database is upgraded without losing images', () async {
+  test('a version 1 database is upgraded to the field schema without losing images', () async {
     sqfliteFfiInit();
     final path = '${tmp.path}/old.db';
     final v1 = await databaseFactoryFfiNoIsolate.openDatabase(
       path,
       options: OpenDatabaseOptions(
         version: 1,
-        onCreate: (db, _) => db.execute(
-          'CREATE TABLE images (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL, '
-          'path TEXT NOT NULL, quality_passed INTEGER NOT NULL, quality_issues TEXT NOT NULL, '
-          'width INTEGER NOT NULL, height INTEGER NOT NULL, brightness REAL NOT NULL, '
-          'sharpness REAL NOT NULL, captured_at TEXT NOT NULL)',
-        ),
+        onCreate: (db, _) async {
+          await db.execute(
+            'CREATE TABLE animals (id INTEGER PRIMARY KEY, study_code TEXT NOT NULL, '
+            'external_id TEXT, linkage_status TEXT NOT NULL, created_at TEXT NOT NULL)',
+          );
+          await db.execute(
+            'CREATE TABLE images (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL, '
+            'path TEXT NOT NULL, quality_passed INTEGER NOT NULL, quality_issues TEXT NOT NULL, '
+            'width INTEGER NOT NULL, height INTEGER NOT NULL, brightness REAL NOT NULL, '
+            'sharpness REAL NOT NULL, captured_at TEXT NOT NULL)',
+          );
+        },
       ),
     );
     await v1.insert('images', {
@@ -222,6 +228,14 @@ void main() {
     final db = await openStudyDatabase(path, factory: databaseFactoryFfiNoIsolate);
     final rows = await db.query('images');
     expect(rows.single['analysed'], 1);
+    expect(rows.single['discarded'], 0);
+    await db.insert('animals', {
+      'study_code': 'PM-A01',
+      'linkage_status': 'pending',
+      'created_at': '2026-11-13T09:00:00',
+      'slaughter_time': '2026-11-13T09:40:00',
+    });
+    expect((await db.query('animals')).single['slaughter_time'], '2026-11-13T09:40:00');
     await db.close();
   });
 }

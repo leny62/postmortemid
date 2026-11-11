@@ -21,7 +21,9 @@ class AppServices {
     required this.deviceModel,
     required this.appVersion,
     Analyser? analyser,
-  }) : analyser = analyser ?? ((path) => analyseFile(path, manifest.quality, manifest.encoder));
+    Analyser? photoCheck,
+  }) : analyser = analyser ?? ((path) => analyseFile(path, manifest.quality, manifest.encoder)),
+       photoCheck = photoCheck ?? ((path) => checkPhotoQuality(path, manifest.quality));
 
   final LocalRepository repository;
   final ModelManifest manifest;
@@ -30,6 +32,9 @@ class AppServices {
   final String deviceModel;
   final String appVersion;
   final Analyser analyser;
+
+  /// Quality check without encoding, for full-size field photos.
+  final Analyser photoCheck;
 
   Verifier get verifier => Verifier(manifest.thresholds);
   String get modelVersion => manifest.encoder.modelVersion;
@@ -54,6 +59,9 @@ class CaptureItem {
 
   /// Set when the image failed for a reason other than a quality issue.
   String? message;
+
+  /// A field photo that failed the quality check but was kept on request.
+  bool kept = false;
   ImageAnalysis? analysis;
   int? imageId;
 }
@@ -79,6 +87,7 @@ class CaptureController extends ChangeNotifier {
   Animal? animal;
   int? _sessionId;
   TimePoint? _timePoint;
+  SessionPurpose? _purpose;
 
   List<CaptureItem> get passedItems => items.where((i) => i.state == ItemState.passed).toList();
   bool get busy => items.any((i) => i.state == ItemState.analysing);
@@ -109,13 +118,25 @@ class CaptureController extends ChangeNotifier {
     await _startSession(timePoint, SessionPurpose.verification);
   }
 
-  Future<void> _startSession(TimePoint timePoint, SessionPurpose purpose) async {
+  /// One burst of field photos for the abattoir protocol. Photos are kept at
+  /// full size and only quality-checked; failed ones are discarded unless kept.
+  Future<void> startCollection(Animal subject, TimePoint timePoint, Modality modality) async {
+    animal = subject;
+    await _startSession(timePoint, SessionPurpose.collection, modality: modality);
+  }
+
+  Future<void> _startSession(
+    TimePoint timePoint,
+    SessionPurpose purpose, {
+    Modality modality = Modality.muzzle,
+  }) async {
     _timePoint = timePoint;
+    _purpose = purpose;
     _sessionId = await _services.repository.addSession(
       CaptureSession(
         animalId: animal!.id!,
         timePoint: timePoint,
-        modality: 'muzzle',
+        modality: modality,
         purpose: purpose,
         deviceModel: _services.deviceModel,
         startedAt: DateTime.now(),
@@ -127,16 +148,22 @@ class CaptureController extends ChangeNotifier {
 
   /// Copies the image into app storage and records it before any processing,
   /// so a crash during analysis does not lose the capture (NFR5).
-  Future<CaptureItem> addImage(String sourcePath) async {
+  /// With [move], a camera temp file is moved rather than copied, so full-size
+  /// field photos are not stored twice.
+  Future<CaptureItem> addImage(String sourcePath, {bool move = false}) async {
     final name = '${DateTime.now().microsecondsSinceEpoch}_${p.basename(sourcePath)}';
-    final saved = await File(sourcePath).copy(p.join(_services.imagesDir.path, name));
+    final target = p.join(_services.imagesDir.path, name);
+    final saved = move
+        ? await _move(File(sourcePath), target)
+        : await File(sourcePath).copy(target);
     final item = CaptureItem(saved.path);
     items.add(item);
     notifyListeners();
 
+    final collecting = _purpose == SessionPurpose.collection;
     try {
       item.imageId = await _services.repository.addPendingImage(_sessionId!, saved.path);
-      final analysis = await _services.analyser(saved.path);
+      final analysis = await (collecting ? _services.photoCheck : _services.analyser)(saved.path);
       await _services.repository.completeImage(
         item.imageId!,
         qualityPassed: analysis.passed,
@@ -150,6 +177,9 @@ class CaptureController extends ChangeNotifier {
         ..analysis = analysis
         ..issues = analysis.issues
         ..state = analysis.passed ? ItemState.passed : ItemState.failed;
+      if (collecting && !analysis.passed) {
+        await _services.repository.setDiscarded(item.imageId!, true);
+      }
     } on FormatException {
       item
         ..state = ItemState.failed
@@ -166,10 +196,32 @@ class CaptureController extends ChangeNotifier {
     return item;
   }
 
+  static Future<File> _move(File source, String target) async {
+    try {
+      return await source.rename(target);
+    } on FileSystemException {
+      final copy = await source.copy(target);
+      await source.delete();
+      return copy;
+    }
+  }
+
   void removeItem(CaptureItem item) {
     items.remove(item);
     notifyListeners();
   }
+
+  /// Counts a field photo that failed the quality check, or stops counting one.
+  Future<void> setKept(CaptureItem item, bool keep) async {
+    await _services.repository.setDiscarded(item.imageId!, !keep);
+    item.kept = keep;
+    notifyListeners();
+  }
+
+  /// Field photos from this burst that count towards the protocol.
+  int get keptCount => items
+      .where((i) => i.state == ItemState.passed || (i.state == ItemState.failed && i.kept))
+      .length;
 
   Future<BiometricTemplate> createTemplate() async {
     final usable = passedItems.take(required).toList();

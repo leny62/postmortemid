@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
+import 'camera_support.dart';
+
 /// Keeps only the centre square of a photo, the area inside the on-screen guide.
 /// Until a detector finds the muzzle, this is what makes a phone photo look
 /// like the muzzle crops the model was trained on.
@@ -46,28 +48,14 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _init() async {
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        setState(() => _error = 'No camera found on this device.');
-        return;
-      }
-      final back = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
-      );
-      final controller = CameraController(back, ResolutionPreset.high, enableAudio: false);
-      await controller.initialize();
+      final controller = await openBackCamera(ResolutionPreset.high);
       if (!mounted) {
         await controller.dispose();
         return;
       }
       setState(() => _controller = controller);
     } on CameraException catch (e) {
-      setState(
-        () => _error = e.code == 'CameraAccessDenied'
-            ? 'Camera permission was denied. Allow camera access in system settings.'
-            : 'The camera could not be opened.',
-      );
+      setState(() => _error = cameraErrorText(e));
     }
   }
 
@@ -117,7 +105,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       aspectRatio: 1 / controller.value.aspectRatio,
                       child: Stack(
                         fit: StackFit.expand,
-                        children: [CameraPreview(controller), const _Guide()],
+                        children: [CameraPreview(controller), const CaptureGuide()],
                       ),
                     ),
                   ),
@@ -134,39 +122,4 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
     );
   }
-}
-
-class _Guide extends StatelessWidget {
-  const _Guide();
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, box) {
-      final side = box.biggest.shortestSide * 0.9;
-      return Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: side,
-            height: side,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white, width: 3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          Positioned(
-            bottom: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              color: Colors.black54,
-              child: const Text(
-                'Fill the square with the muzzle. Hold still.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
 }

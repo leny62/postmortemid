@@ -24,7 +24,58 @@ enum TimePoint {
   static TimePoint fromCode(String code) => values.firstWhere((t) => t.code == code);
 }
 
-enum SessionPurpose { enrolment, verification }
+enum Modality {
+  muzzle('Muzzle'),
+  face('Face');
+
+  const Modality(this.label);
+  final String label;
+}
+
+enum SessionPurpose { enrolment, verification, collection }
+
+enum NoseCondition {
+  clean('Clean'),
+  wet('Wet'),
+  dirty('Dirty'),
+  damaged('Damaged');
+
+  const NoseCondition(this.label);
+  final String label;
+}
+
+/// What the collector records about the animal at the abattoir, replacing the paper log.
+class FieldLog {
+  const FieldLog({this.slaughterTime, this.headWashed, this.noseCondition, this.notes});
+
+  factory FieldLog.fromRow(Map<String, Object?> r) => FieldLog(
+    slaughterTime: switch (r['slaughter_time']) {
+      final String t => DateTime.parse(t),
+      _ => null,
+    },
+    headWashed: switch (r['head_washed']) {
+      final int v => v == 1,
+      _ => null,
+    },
+    noseCondition: switch (r['nose_condition']) {
+      final String n => NoseCondition.values.byName(n),
+      _ => null,
+    },
+    notes: r['notes'] as String?,
+  );
+
+  final DateTime? slaughterTime;
+  final bool? headWashed;
+  final NoseCondition? noseCondition;
+  final String? notes;
+
+  Map<String, Object?> toRow() => {
+    'slaughter_time': slaughterTime?.toIso8601String(),
+    'head_washed': headWashed == null ? null : (headWashed! ? 1 : 0),
+    'nose_condition': noseCondition?.name,
+    'notes': notes,
+  };
+}
 
 class Animal {
   const Animal({
@@ -33,6 +84,7 @@ class Animal {
     this.externalId,
     required this.linkageStatus,
     required this.createdAt,
+    this.fieldLog = const FieldLog(),
   });
 
   factory Animal.fromRow(Map<String, Object?> r) => Animal(
@@ -41,6 +93,7 @@ class Animal {
     externalId: r['external_id'] as String?,
     linkageStatus: LinkageStatus.values.byName(r['linkage_status'] as String),
     createdAt: DateTime.parse(r['created_at'] as String),
+    fieldLog: FieldLog.fromRow(r),
   );
 
   final int? id;
@@ -50,6 +103,7 @@ class Animal {
   final String? externalId;
   final LinkageStatus linkageStatus;
   final DateTime createdAt;
+  final FieldLog fieldLog;
 }
 
 class CaptureSession {
@@ -66,7 +120,7 @@ class CaptureSession {
   final int? id;
   final int animalId;
   final TimePoint timePoint;
-  final String modality;
+  final Modality modality;
   final SessionPurpose purpose;
   final String deviceModel;
   final DateTime startedAt;

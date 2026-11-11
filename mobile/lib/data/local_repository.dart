@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../biometrics/verifier.dart';
+import 'csv.dart';
 import 'models.dart';
 
 class LocalRepository {
@@ -33,10 +34,26 @@ class LocalRepository {
     return rows.isEmpty ? null : Animal.fromRow(rows.first);
   }
 
+  Future<List<Animal>> allAnimals() async =>
+      (await _db.query('animals', orderBy: 'study_code')).map(Animal.fromRow).toList();
+
+  Future<Animal> animalById(int id) async =>
+      Animal.fromRow((await _db.query('animals', where: 'id = ?', whereArgs: [id])).single);
+
+  Future<void> updateFieldLog(int animalId, FieldLog log) =>
+      _db.update('animals', log.toRow(), where: 'id = ?', whereArgs: [animalId]);
+
+  Future<void> updateLinkage(int animalId, LinkageStatus status) => _db.update(
+    'animals',
+    {'linkage_status': status.name},
+    where: 'id = ?',
+    whereArgs: [animalId],
+  );
+
   Future<int> addSession(CaptureSession s) => _db.insert('capture_sessions', {
     'animal_id': s.animalId,
     'time_point': s.timePoint.code,
-    'modality': s.modality,
+    'modality': s.modality.name,
     'purpose': s.purpose.name,
     'device_model': s.deviceModel,
     'started_at': s.startedAt.toIso8601String(),
@@ -77,6 +94,46 @@ class LocalRepository {
     },
     where: 'id = ?',
     whereArgs: [id],
+  );
+
+  Future<void> setDiscarded(int imageId, bool discarded) =>
+      _db.update('images', {'discarded': discarded ? 1 : 0}, where: 'id = ?', whereArgs: [imageId]);
+
+  /// Kept field photos per animal, time point and modality. A photo counts once
+  /// it is analysed and not discarded, whether or not it passed the quality check.
+  Future<Map<int, Map<(TimePoint, Modality), int>>> collectedCounts() async {
+    final rows = await _db.rawQuery(
+      '''
+      SELECT s.animal_id, s.time_point, s.modality, COUNT(*) AS n
+      FROM images i JOIN capture_sessions s ON s.id = i.session_id
+      WHERE s.purpose = ? AND i.analysed = 1 AND i.discarded = 0
+      GROUP BY s.animal_id, s.time_point, s.modality''',
+      [SessionPurpose.collection.name],
+    );
+    final counts = <int, Map<(TimePoint, Modality), int>>{};
+    for (final r in rows) {
+      final key = (
+        TimePoint.fromCode(r['time_point'] as String),
+        Modality.values.byName(r['modality'] as String),
+      );
+      (counts[r['animal_id'] as int] ??= {})[key] = r['n'] as int;
+    }
+    return counts;
+  }
+
+  /// Every kept field photo with its animal and session, oldest first.
+  Future<List<Map<String, Object?>>> fieldImages() => _db.rawQuery(
+    '''
+    SELECT a.study_code, s.time_point, s.modality, s.id AS session_id, s.device_model,
+      i.id AS image_id, i.path, i.captured_at, i.quality_passed, i.quality_issues,
+      i.width, i.height, i.brightness, i.sharpness
+    FROM images i
+    JOIN capture_sessions s ON s.id = i.session_id
+    JOIN animals a ON a.id = s.animal_id
+    WHERE s.purpose = ? AND i.analysed = 1 AND i.discarded = 0
+      AND a.linkage_status != ?
+    ORDER BY a.study_code, i.captured_at, i.id''',
+    [SessionPurpose.collection.name, LinkageStatus.excluded.name],
   );
 
   Future<int> addTemplate(BiometricTemplate t) => _db.insert('templates', {
@@ -164,12 +221,10 @@ class LocalRepository {
     final files = <File>[];
     for (final (table, columns) in _exportColumns) {
       final rows = await _db.query(table, columns: columns, orderBy: 'id');
-      final lines = [
-        columns.join(','),
-        for (final r in rows) columns.map((c) => _csvField(r[c])).join(','),
-      ];
       final file = File(p.join(dir.path, '$table.csv'));
-      await file.writeAsString('${lines.join('\n')}\n');
+      await file.writeAsString(
+        csvTable(columns, [for (final r in rows) columns.map((c) => r[c]).toList()]),
+      );
       files.add(file);
     }
     return files;
@@ -177,7 +232,19 @@ class LocalRepository {
 }
 
 const _exportColumns = [
-  ('animals', ['id', 'study_code', 'linkage_status', 'created_at']),
+  (
+    'animals',
+    [
+      'id',
+      'study_code',
+      'linkage_status',
+      'created_at',
+      'slaughter_time',
+      'head_washed',
+      'nose_condition',
+      'notes',
+    ],
+  ),
   (
     'capture_sessions',
     ['id', 'animal_id', 'time_point', 'modality', 'purpose', 'device_model', 'started_at'],
@@ -196,6 +263,7 @@ const _exportColumns = [
       'brightness',
       'sharpness',
       'captured_at',
+      'discarded',
     ],
   ),
   ('templates', ['id', 'animal_id', 'model_version', 'image_count', 'created_at']),
@@ -216,9 +284,3 @@ const _exportColumns = [
     ],
   ),
 ];
-
-String _csvField(Object? value) {
-  final text = value?.toString() ?? '';
-  if (!text.contains(RegExp('[",\n]'))) return text;
-  return '"${text.replaceAll('"', '""')}"';
-}
