@@ -21,6 +21,8 @@ This repository contains the first working version of the software for that stud
 - History of all results in local SQLite, each traceable to model, threshold and app versions
 - Each image is recorded in the database before it is analysed, so a crash does not lose a capture
 - Export of all study records as CSV files on the phone (ear tags are left out)
+- Field collection for the abattoir study: an animal checklist (alive muzzle 6, alive face 4, after-slaughter muzzle 5 and face 3), burst capture at full resolution with muzzle and face guides, tap to focus and 2x zoom, a quality check on every photo, and a log of slaughter time, head washing, nose condition and identity-link certainty
+- One-tap export of the field photos as a zip in the folder layout the pilot analysis reads, shared to Drive, Quick Share or Bluetooth; ear tags stay on the phone
 - The trained MobileNetV3-Large ArcFace model runs on the phone with TensorFlow Lite (LiteRT), fully offline; an LBP texture encoder is kept as a fallback
 - Clear labelling that the model was trained on public live-cattle images only and that post-mortem use has not been measured
 
