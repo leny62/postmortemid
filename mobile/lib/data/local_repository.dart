@@ -122,7 +122,8 @@ class LocalRepository {
   }
 
   /// Every kept field photo with its animal and session, oldest first.
-  Future<List<Map<String, Object?>>> fieldImages() => _db.rawQuery(
+  /// With [notUploaded], only those not yet on the study server.
+  Future<List<Map<String, Object?>>> fieldImages({bool notUploaded = false}) => _db.rawQuery(
     '''
     SELECT a.study_code, s.time_point, s.modality, s.id AS session_id, s.device_model,
       i.id AS image_id, i.path, i.captured_at, i.quality_passed, i.quality_issues,
@@ -131,10 +132,27 @@ class LocalRepository {
     JOIN capture_sessions s ON s.id = i.session_id
     JOIN animals a ON a.id = s.animal_id
     WHERE s.purpose = ? AND i.analysed = 1 AND i.discarded = 0
-      AND a.linkage_status != ?
+      AND a.linkage_status != ? ${notUploaded ? 'AND i.uploaded_at IS NULL' : ''}
     ORDER BY a.study_code, i.captured_at, i.id''',
     [SessionPurpose.collection.name, LinkageStatus.excluded.name],
   );
+
+  Future<void> markUploaded(int imageId) => _db.update(
+    'images',
+    {'uploaded_at': DateTime.now().toIso8601String()},
+    where: 'id = ?',
+    whereArgs: [imageId],
+  );
+
+  Future<String?> setting(String key) async {
+    final rows = await _db.query('settings', where: 'key = ?', whereArgs: [key]);
+    return rows.isEmpty ? null : rows.single['value'] as String;
+  }
+
+  Future<void> saveSetting(String key, String value) => _db.insert('settings', {
+    'key': key,
+    'value': value,
+  }, conflictAlgorithm: ConflictAlgorithm.replace);
 
   Future<int> addTemplate(BiometricTemplate t) => _db.insert('templates', {
     'animal_id': t.animalId,

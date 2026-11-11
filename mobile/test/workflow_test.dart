@@ -236,6 +236,8 @@ void main() {
       'slaughter_time': '2026-11-13T09:40:00',
     });
     expect((await db.query('animals')).single['slaughter_time'], '2026-11-13T09:40:00');
+    expect(rows.single['uploaded_at'], isNull);
+    await db.insert('settings', {'key': 'upload_url', 'value': 'https://example.org'});
     await db.close();
   });
 }

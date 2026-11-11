@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only for the optional upload to the study server; everything else is offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="PostMortemID"
         android:name="${applicationName}"

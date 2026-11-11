@@ -9,6 +9,7 @@ environment:
 dependencies:
   archive: ^4.6.0
   camera: ^0.12.1
+  crypto: ^3.0.8
   device_info_plus: ^13.3.0
   flutter:
     sdk: flutter

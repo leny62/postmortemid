@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
-const schemaVersion = 3;
+const schemaVersion = 4;
 
 const _schema = [
   '''
@@ -38,7 +38,8 @@ const _schema = [
     sharpness REAL NOT NULL,
     captured_at TEXT NOT NULL,
     analysed INTEGER NOT NULL DEFAULT 0,
-    discarded INTEGER NOT NULL DEFAULT 0
+    discarded INTEGER NOT NULL DEFAULT 0,
+    uploaded_at TEXT
   )''',
   '''
   CREATE TABLE templates (
@@ -63,7 +64,10 @@ const _schema = [
     app_version TEXT NOT NULL,
     created_at TEXT NOT NULL
   )''',
+  _settingsTable,
 ];
+
+const _settingsTable = 'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)';
 
 Future<Database> openStudyDatabase(String path, {DatabaseFactory? factory}) {
   return (factory ?? databaseFactory).openDatabase(
@@ -91,6 +95,10 @@ Future<Database> openStudyDatabase(String path, {DatabaseFactory? factory}) {
           ]) {
             await db.execute('ALTER TABLE $column');
           }
+        }
+        if (from < 4) {
+          await db.execute('ALTER TABLE images ADD COLUMN uploaded_at TEXT');
+          await db.execute(_settingsTable);
         }
       },
     ),

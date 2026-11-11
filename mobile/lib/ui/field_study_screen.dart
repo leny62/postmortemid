@@ -4,7 +4,9 @@ import 'package:share_plus/share_plus.dart';
 import '../capture/capture_controller.dart';
 import '../capture/field_protocol.dart';
 import '../data/field_export.dart';
+import '../data/field_upload.dart';
 import '../data/models.dart';
+import '../data/upload_client.dart';
 import 'animal_field_screen.dart';
 
 /// Abattoir data collection: every study animal with its photo progress.
@@ -21,6 +23,8 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
   List<Animal>? _animals;
   Map<int, Map<(TimePoint, Modality), int>> _counts = const {};
   bool _exporting = false;
+  int _notUploaded = 0;
+  (int, int)? _uploading;
 
   @override
   void initState() {
@@ -32,10 +36,12 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
     final repo = widget.services.repository;
     final animals = await repo.allAnimals();
     final counts = await repo.collectedCounts();
+    final notUploaded = (await repo.fieldImages(notUploaded: true)).length;
     if (mounted) {
       setState(() {
         _animals = animals;
         _counts = counts;
+        _notUploaded = notUploaded;
       });
     }
   }
@@ -91,6 +97,61 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
     }
   }
 
+  Future<bool> _editServer() async {
+    final repo = widget.services.repository;
+    final url = await repo.setting(uploadUrlKey) ?? '';
+    final token = await repo.setting(uploadTokenKey) ?? '';
+    if (!mounted) return false;
+    final saved = await showDialog<(String, String)>(
+      context: context,
+      builder: (_) => _ServerDialog(url: url, token: token),
+    );
+    if (saved == null) return false;
+    await repo.saveSetting(uploadUrlKey, saved.$1);
+    await repo.saveSetting(uploadTokenKey, saved.$2);
+    return true;
+  }
+
+  Future<void> _upload() async {
+    final s = widget.services;
+    var url = await s.repository.setting(uploadUrlKey);
+    var token = await s.repository.setting(uploadTokenKey);
+    if (url == null || token == null) {
+      if (!mounted || !await _editServer()) return;
+      url = await s.repository.setting(uploadUrlKey);
+      token = await s.repository.setting(uploadTokenKey);
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _uploading = (0, _notUploaded));
+    final client = UploadClient(url!, token!);
+    try {
+      final result = await uploadPending(
+        s.repository,
+        client,
+        s.deviceModel,
+        onProgress: (done, total) {
+          if (mounted) setState(() => _uploading = (done, total));
+        },
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.error == null
+                ? 'Uploaded ${result.uploaded} photos. Everything is on the server.'
+                : '${result.error} ${result.remaining} photos are still waiting.',
+          ),
+        ),
+      );
+    } on UploadException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      client.close();
+      if (mounted) setState(() => _uploading = null);
+      await _reload();
+    }
+  }
+
   String _summary(Animal a) {
     final counts = _counts[a.id] ?? const {};
     String part(TimePoint t) {
@@ -110,6 +171,23 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
       appBar: AppBar(
         title: const Text('Field collection'),
         actions: [
+          if (_uploading case (final done, final total))
+            Center(child: Text('$done / $total'))
+          else
+            IconButton(
+              tooltip: 'Upload to study server',
+              onPressed: _notUploaded == 0 ? null : _upload,
+              icon: Badge(
+                isLabelVisible: _notUploaded > 0,
+                label: Text('$_notUploaded'),
+                child: const Icon(Icons.cloud_upload_outlined),
+              ),
+            ),
+          PopupMenuButton<void>(
+            itemBuilder: (_) => [
+              PopupMenuItem(onTap: _editServer, child: const Text('Study server settings')),
+            ],
+          ),
           IconButton(
             tooltip: 'Export and share',
             onPressed: _exporting || (animals?.isEmpty ?? true) ? null : _export,
@@ -220,6 +298,69 @@ class _AddAnimalDialogState extends State<_AddAnimalDialog> {
               ))
             : null,
         child: const Text('Add'),
+      ),
+    ],
+  );
+}
+
+class _ServerDialog extends StatefulWidget {
+  const _ServerDialog({required this.url, required this.token});
+
+  final String url;
+  final String token;
+
+  @override
+  State<_ServerDialog> createState() => _ServerDialogState();
+}
+
+class _ServerDialogState extends State<_ServerDialog> {
+  late final _url = TextEditingController(text: widget.url);
+  late final _token = TextEditingController(text: widget.token);
+
+  bool get _valid =>
+      Uri.tryParse(_url.text.trim())?.isScheme('https') == true && _token.text.trim().isNotEmpty;
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _token.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Study server'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _url,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'Server address',
+            hintText: 'https://pmid.lenycodes.tech',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _token,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Upload key',
+            helperText: 'From the researcher',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      FilledButton(
+        onPressed: _valid
+            ? () => Navigator.pop(context, (_url.text.trim(), _token.text.trim()))
+            : null,
+        child: const Text('Save'),
       ),
     ],
   );

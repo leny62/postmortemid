@@ -188,6 +188,7 @@ void main() {
     expect(find.text('Alive 2/10  ·  After slaughter 0/8'), findsOneWidget);
     expect(find.text('PM-A02'), findsOneWidget);
     expect(find.text('Add animal'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget, reason: 'photos waiting for upload');
   });
 
   testWidgets('animal screen lists the four photo sets and the log', (tester) async {

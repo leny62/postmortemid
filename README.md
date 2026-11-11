@@ -10,7 +10,7 @@ This repository contains the first working version of the software for that stud
 
 ## What is implemented
 
-**Mobile prototype (Flutter, Android, fully offline)**
+**Mobile prototype (Flutter, Android, offline first)**
 
 - Register a study animal (`PM-0001` style code, optional ear tag or facility record, identity-link status)
 - Guided camera capture with a square muzzle guide, or import from the gallery
@@ -23,6 +23,7 @@ This repository contains the first working version of the software for that stud
 - Export of all study records as CSV files on the phone (ear tags are left out)
 - Field collection for the abattoir study: an animal checklist (alive muzzle 6, alive face 4, after-slaughter muzzle 5 and face 3), burst capture at full resolution with muzzle and face guides, tap to focus and 2x zoom, a quality check on every photo, and a log of slaughter time, head washing, nose condition and identity-link certainty
 - One-tap export of the field photos as a zip in the folder layout the pilot analysis reads, shared to Drive, Quick Share or Bluetooth; ear tags stay on the phone
+- Optional upload to the study server (`server/`): each photo is sent once with its checksum, the animal logs follow, and anything that fails stays queued for the next try
 - The trained MobileNetV3-Large ArcFace model runs on the phone with TensorFlow Lite (LiteRT), fully offline; an LBP texture encoder is kept as a fallback
 - Clear labelling that the model was trained on public live-cattle images only and that post-mortem use has not been measured
 

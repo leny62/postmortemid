@@ -6,113 +6,44 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import 'csv.dart';
+import 'field_records.dart';
 import 'local_repository.dart';
-import 'models.dart';
-
-final _fileStamp = DateFormat('yyyyMMdd_HHmmss_SSS');
-
-/// Stage folder names the pilot analysis reads: L for live, then P0 or P1.
-String stageFolder(TimePoint t) => t == TimePoint.t0 ? 'L' : t.code;
 
 /// Writes the field photos as one zip in the folder layout the pilot analysis
 /// reads (PM-A01/L/muzzle/...), with slaughter times and per-photo logs.
 /// Ear tags stay on the phone. Only photographed, non-excluded animals are listed.
 Future<File> exportFieldZip(LocalRepository repo, Directory exportsDir, String deviceModel) async {
-  final images = await repo.fieldImages();
-  final photographed = {for (final r in images) r['study_code']};
+  final photos = (await repo.fieldImages()).map(FieldPhoto.fromRow).toList();
+  final photographed = {for (final ph in photos) ph.identity};
   final animals = [
     for (final a in await repo.allAnimals())
-      if (photographed.contains(a.studyCode)) a,
+      if (photographed.contains(a.studyCode)) fieldAnimalLog(a, deviceModel),
   ];
 
-  final files = <(String, String)>[];
-  final imageRows = <List<Object?>>[];
-  for (final r in images) {
-    final capturedAt = DateTime.parse(r['captured_at'] as String);
-    final stage = stageFolder(TimePoint.fromCode(r['time_point'] as String));
-    final name = p.posix.join(
-      r['study_code'] as String,
-      stage,
-      r['modality'] as String,
-      '${_fileStamp.format(capturedAt)}_${r['image_id']}.jpg',
-    );
-    files.add((r['path'] as String, name));
-    imageRows.add([
-      name,
-      r['study_code'],
-      stage,
-      r['modality'],
-      r['session_id'],
-      r['captured_at'],
-      r['quality_passed'],
-      r['quality_issues'],
-      r['width'],
-      r['height'],
-      r['brightness'],
-      r['sharpness'],
-      r['device_model'],
-    ]);
-  }
-
+  List<Object?> pick(Map<String, Object?> row, List<String> columns) => [
+    for (final c in columns) row[c],
+  ];
   final texts = {
     'slaughter_times.csv': csvTable(
       ['identity', 'slaughter_time'],
       [
         for (final a in animals)
-          if (a.fieldLog.slaughterTime != null)
-            [a.studyCode, a.fieldLog.slaughterTime!.toIso8601String()],
+          if (a['slaughter_time'] != null) pick(a, ['identity', 'slaughter_time']),
       ],
     ),
-    'field_animals.csv': csvTable(
-      [
-        'identity',
-        'linkage_status',
-        'slaughter_time',
-        'head_washed',
-        'nose_condition',
-        'notes',
-        'device_model',
-      ],
-      [
-        for (final a in animals)
-          [
-            a.studyCode,
-            a.linkageStatus.name,
-            a.fieldLog.slaughterTime?.toIso8601String(),
-            switch (a.fieldLog.headWashed) {
-              true => 'yes',
-              false => 'no',
-              null => '',
-            },
-            a.fieldLog.noseCondition?.name,
-            a.fieldLog.notes,
-            deviceModel,
-          ],
-      ],
-    ),
-    'field_images.csv': csvTable([
-      'file',
-      'identity',
-      'stage',
-      'modality',
-      'burst',
-      'captured_at',
-      'quality_passed',
-      'quality_issues',
-      'width',
-      'height',
-      'brightness',
-      'sharpness',
-      'device_model',
-    ], imageRows),
+    'field_animals.csv': csvTable(fieldAnimalColumns, [
+      for (final a in animals) pick(a, fieldAnimalColumns),
+    ]),
+    'field_images.csv': csvTable(fieldImageColumns, [
+      for (final ph in photos) pick(ph.log, fieldImageColumns),
+    ]),
   };
+  final files = [for (final ph in photos) (ph.sourcePath, ph.file)];
 
   await exportsDir.create(recursive: true);
   final device = deviceModel.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '-');
-  final out = p.join(
-    exportsDir.path,
-    'pmid_field_${device}_${_fileStamp.format(DateTime.now())}.zip',
-  );
+  final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+  final out = p.join(exportsDir.path, 'pmid_field_${device}_$stamp.zip');
   // Photos are already JPEG, so they are stored uncompressed; zipping in an
   // isolate keeps the UI responsive for exports of a few hundred megabytes.
   await Isolate.run(() => _writeZip(out, files, texts));
