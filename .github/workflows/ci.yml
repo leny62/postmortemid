@@ -15,6 +15,18 @@ jobs:
       - run: uv run ruff check ml
       - run: uv run pytest -q
 
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
   mobile:
     runs-on: ubuntu-latest
     defaults:

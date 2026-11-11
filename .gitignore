@@ -28,3 +28,4 @@ ml/artifacts/
 
 # Abattoir pilot images (identifiable study data, never committed)
 ml/data/field/
+!server/.env.example
