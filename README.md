@@ -133,6 +133,22 @@ uv run ruff check ml
 uv run pyright
 ```
 
+## Abattoir pilot data
+
+Field photos are never committed; they live in `ml/data/field/` (git-ignored) as `PM-A01/L/muzzle/*.jpg`, `PM-A01/P0/face/*.jpg` and so on, with `slaughter_times.csv` beside them.
+
+```bash
+# Zips shared from the app's Field collection screen, one per phone; logs are merged
+uv run python ml/scripts/import_field.py zip pmid_field_*.zip
+
+# Photos taken with a phone's own camera (JPEG originals)
+uv run python ml/scripts/import_field.py sheet <photo_dir>    # runs.csv + contact_sheet.png
+#   label the first photo of each run in runs.csv: identity, stage (L or P0), modality (muzzle, face or skip)
+uv run python ml/scripts/import_field.py camera <photo_dir>
+
+uv run python ml/scripts/run_pilot.py
+```
+
 ## Running the mobile application
 
 ```bash

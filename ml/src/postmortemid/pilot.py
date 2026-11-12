@@ -11,6 +11,7 @@ images are the live-to-live queries (E1) and all P0 images are the
 live-to-post-mortem queries (E2), so both conditions share one template.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -27,15 +28,19 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 EXIF_IFD = 0x8769
 EXIF_DATETIME_ORIGINAL = 36867
 EXIF_DATETIME = 306
+# The app names field photos by capture time, e.g. 20261113_094012_345_17.jpg.
+APP_NAME_TIME = re.compile(r"^(\d{8}_\d{6}_\d{3})_")
 
 
 def capture_time(path: Path) -> datetime | None:
+    """EXIF capture time, else the time in an app file name."""
     with Image.open(path) as im:
         exif = im.getexif()
         raw = exif.get_ifd(EXIF_IFD).get(EXIF_DATETIME_ORIGINAL) or exif.get(EXIF_DATETIME)
-    if not raw:
-        return None
-    return datetime.strptime(str(raw).strip("\x00 "), "%Y:%m:%d %H:%M:%S")
+    if raw:
+        return datetime.strptime(str(raw).strip("\x00 "), "%Y:%m:%d %H:%M:%S")
+    named = APP_NAME_TIME.match(path.name)
+    return datetime.strptime(named.group(1), "%Y%m%d_%H%M%S_%f") if named else None
 
 
 def scan(root: Path) -> pd.DataFrame:
