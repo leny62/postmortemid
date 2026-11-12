@@ -85,6 +85,12 @@ The app loads a manifest exported by the pipeline that names the encoder, its mo
 └── docs/                        architecture, model, dataset, experiment plan, figures, screenshots
 ```
 
+## Links
+
+- Walkthrough video: see [Demo video](#demo-video)
+- Technical report: [docs/report/PostMortemID_Technical_Report.pdf](docs/report/PostMortemID_Technical_Report.pdf)
+- Android APK: [Releases](https://github.com/leny62/postmortemid/releases/tag/apk-2026-11-12)
+
 ## Install the app
 
 Android phones (arm64): download the APK from the [Releases](https://github.com/leny62/postmortemid/releases) page, open it on the phone and allow installs from that source. The app works offline; the study server is only needed for the optional upload.
@@ -97,6 +103,7 @@ Requirements:
 
 - [uv](https://docs.astral.sh/uv/) 0.5 or newer (it installs Python 3.12)
 - Flutter 3.44 (stable, Dart 3.12) with the Android SDK, JDK 17 (bundled with Android Studio) and an Android emulator image or an Android phone
+- For the iOS build only: Xcode 26 and CocoaPods
 - About 6 GB of free disk: dataset download and unpacked images 1.2 GB, Python environment 1.2 GB, image cache 0.7 GB, Flutter build 1.6 GB, and about 1 GB more if you rebuild the phone model
 - About 30 minutes for the first full run: download, `uv sync` and the notebook
 
@@ -295,6 +302,8 @@ The code is released under the MIT licence (see [LICENSE](LICENSE)).
 The muzzle images are from Xiong, Li and Erickson (2022), *Beef Cattle Muzzle/Noseprint database for individual identification*, Zenodo, [doi:10.5281/zenodo.6324361](https://doi.org/10.5281/zenodo.6324361), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The raw images are downloaded by the setup script and are not committed. A few appear, unmodified except for resizing, in the notebook outputs and the app screenshots. The repository adds derived file-level metadata and split labels. See [docs/dataset.md](docs/dataset.md).
 
 ## Documentation
+
+- [Technical report (PDF, 4 pages)](docs/report/PostMortemID_Technical_Report.pdf): scope alignment, functionality, testing and code quality
 
 - [docs/architecture.md](docs/architecture.md): app layers, inference seam, storage, pipeline
 - [docs/model.md](docs/model.md): biometric input, embedding model, thresholds, versioning
