@@ -1,12 +1,12 @@
 # PostMortemID
 
-**Initial software product demonstration** for the ALU BSc. Software Engineering capstone (Machine Learning specialisation).
+**Final software product** for the ALU BSc. Software Engineering capstone (Machine Learning specialisation).
 
 Research title: *PostMortemID: Evaluating Muzzle Identity Persistence from Ante-Mortem to Post-Mortem Smartphone Imagery in Rwandan Cattle*
 
 PostMortemID investigates whether the ridge and bead pattern on a cow's muzzle, photographed with an ordinary smartphone while the animal is alive, still verifies the same animal after slaughter. The planned study photographs the same cattle at a Rwandan abattoir before and shortly after routine slaughter, and measures 1:1 verification performance across that change, with the face as a comparator.
 
-This repository contains the first working version of the software for that study: an offline Flutter app for guided capture, quality checks, enrolment and verification, and a reproducible Python pipeline with a model notebook. The model work so far uses a **public dataset of live cattle**. No post-mortem images have been collected yet, so nothing here measures post-mortem performance.
+This repository contains the software for that study: an offline Flutter app for guided capture, quality checks, enrolment, verification and field data collection, a small upload server for the field phones, and a reproducible Python pipeline with a model notebook. The model work so far uses a **public dataset of live cattle**. No post-mortem images have been collected yet, so nothing here measures post-mortem performance.
 
 ## What is implemented
 
@@ -79,9 +79,17 @@ The app loads a manifest exported by the pipeline that names the encoder, its mo
 │   ├── data/splits/             versioned split and cleaning files (no images)
 │   ├── experiments/             experiment log and results JSON
 │   └── tests/                   pytest
-├── mobile/                      Flutter app (lib/, test/, assets/model/manifest.json)
+├── mobile/                      Flutter app (lib/, test/, assets/model/manifest.json, android/, ios/)
+├── server/                      FastAPI upload server for field photos, Docker and nginx deploy files
+├── .github/workflows/           CI, server deploy, signed APK release
 └── docs/                        architecture, model, dataset, experiment plan, figures, screenshots
 ```
+
+## Install the app
+
+Android phones (arm64): download the APK from the [Releases](https://github.com/leny62/postmortemid/releases) page, open it on the phone and allow installs from that source. The app works offline; the study server is only needed for the optional upload.
+
+iPhone: there is no public build. The `mobile/ios/` project builds and runs from Xcode (`flutter build ios`) with a personal Apple ID.
 
 ## Setup
 
@@ -178,6 +186,26 @@ flutter test
 flutter test integration_test    # needs a running emulator or phone; reinstalls the app; checks on-device model output and timing
 ```
 
+## Testing
+
+Every push and pull request runs [CI](.github/workflows/ci.yml): the ML checks (ruff, pyright, pytest), the server tests and the Flutter analyser and tests. On 12 November 2026: 46 Flutter, 39 ML and 4 server tests, all passing.
+
+| Level | What is checked |
+|---|---|
+| Python unit tests (`ml/tests`) | split leakage (no animal in two splits), duplicate screening, metrics and bootstrap, thresholds, field import (zip merge, conflicting slaughter times, camera-roll labelling, unlabelled runs refused) |
+| Python and Dart parity | a fixed image gives the same model input and LBP features in Python and Dart |
+| Flutter unit and widget tests (`mobile/test`) | quality check on blurred, dark and small images, enrol and verify workflow, database schema upgrades, field checklist counts, zip layout without ear tags, upload retry after a 500, rejected key, no network |
+| Flutter integration test (`mobile/integration_test`) | on-device model output against the laptop (cosine 1.000000) and timing |
+| Server tests (`server/tests`) | key check, idempotent upload by checksum, path validation, export zip |
+| Manual, Android emulator | add animal, burst capture, slaughter log, zip export and share sheet, upload to a local server |
+
+Performance and compatibility:
+
+- Android emulator on an Apple M-series laptop: about 35 ms per model call and 280 ms for the whole path of one 720 x 720 photo; release APK 50 MB for arm64.
+- Full-resolution field photos are checked on a 1024 px decode in a background isolate, so the camera stays usable during a burst.
+- The iOS project builds with the same Dart code; on iOS the app stores exports in its Documents folder, shown in the Files app.
+- Not yet measured: timing on a low-cost Android phone, which is part of the field study.
+
 ## Initial results
 
 Experiment E0, public live-cattle data only. 52 test animals never used for training or thresholds; 3 enrolment images per animal in capture order; 454 genuine and 22,700 impostor comparisons; thresholds fixed on 52 dev animals. 95% bootstrap intervals with 2,000 resamples of animals, where both animals of an impostor comparison are resampled (subsets bootstrap, Bolle, Ratha and Pankanti, 2004).
@@ -215,10 +243,10 @@ On the Android emulator, the on-device output matched the laptop's TFLite output
 
 ## Deployment plan
 
-1. **Now: local offline prototype.** The Flutter app runs on Android with no network. Images, templates and results stay in app storage and SQLite, and can be exported as CSV. Encoder: the E0 ArcFace MobileNetV3-Large model in TensorFlow Lite (LiteRT is the current name of TensorFlow Lite; the model format is the same), with thresholds set on E0 dev animals.
+1. **Now: offline app with field collection.** The Flutter app runs on Android with no network. Images, templates and results stay in app storage and SQLite, and can be exported as CSV. Encoder: the E0 ArcFace MobileNetV3-Large model in TensorFlow Lite (LiteRT is the current name of TensorFlow Lite; the model format is the same), with thresholds set on E0 dev animals.
 2. **Next: on-device tests on the study phones.** Measure inference time on the two low-cost Android phones, try reduced-precision weights and report any change in scores, and replace the model with one trained on the study's development animals.
 3. **Detector.** Label muzzle and face boxes on pilot images and train a small YOLO detector, so the app crops the biometric region instead of using the centre square.
-4. **Optional synchronisation.** A small FastAPI and PostgreSQL service to collect records from the study phones and serve new model versions, only if the field study needs it. The app must keep working offline.
+4. **Field upload server (built).** A FastAPI service in Docker behind nginx and TLS on the study VPS receives field photos and animal logs from the phones, keyed per collector, and exports them as one zip for the pilot analysis. GitHub Actions tests and redeploys it on every merge to `main`. The app keeps working offline and uploads when it has a connection. Serving new model versions to the phones is not built.
 5. **Research validation.** After ethics clearance and a facility agreement: pilot, then paired live and post-mortem capture, and experiments E1 to E7 on held-out animals. Thresholds will be set again on the study data.
 
 The prototype will not be deployed to insurers or farmers during this study.
@@ -230,6 +258,7 @@ Demonstrated:
 - the full offline capture, quality check, enrolment, verification and history workflow on Android
 - a leakage-controlled live-to-live evaluation on public data with measured, reproducible metrics
 - the trained ArcFace model running on the phone, with the same output as on the laptop
+- field collection on the emulator: animal checklist, burst capture, slaughter log, zip export and upload to the study server
 
 Not demonstrated:
 
@@ -255,7 +284,7 @@ The duplicate-identity screen removed 7 folders. BC et al. (2026) report 19; the
 | MobileNetV3-Large + ArcFace, k-image templates, cosine similarity | Implemented and trained on public data; k = 1, 3, 5 reported |
 | Match / Review / No match from tau(FAR 1%) and tau(FAR 0.1%) | Implemented in Python and in the app |
 | On-device inference with TensorFlow Lite | E0 ArcFace model running in the app via LiteRT; output matches the laptop on the emulator; timing on low-cost study phones pending |
-| Offline Flutter app, SQLite, model versioning (FR1 to FR8, NFR1 to NFR8) | Done: FR2, FR4 to FR7, NFR5 to NFR8, and CSV export for FR3. Partial: FR1 (square guide, but no bursts and no face framing), FR3 (no burst number, face modality, slaughter time, lighting or muzzle condition fields yet), NFR1 (timed on an emulator only), NFR4 (the optional ear tag is kept in the app database, not in a separate linkage file). FR8 sync is optional and not built. These move to the next increment |
+| Offline Flutter app, SQLite, model versioning (FR1 to FR8, NFR1 to NFR8) | Done: FR1 (bursts with muzzle and face guides), FR2, FR3 (face modality, slaughter time, head washing, nose condition; lighting goes in the notes), FR4 to FR7, FR8 as a one-way upload to the study server, NFR5 to NFR8. Partial: NFR1 (timed on an emulator only), NFR4 (the ear tag stays on the phone and is never exported or uploaded, but is kept in the app database rather than a separate linkage file) |
 | E0 public-data baseline | Done |
 | E1 to E7 paired experiments | Planned, need field data |
 
