@@ -1,8 +1,0 @@
-@page { size: A4; margin: 16mm 15mm; }
-body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 9.6pt; line-height: 1.38; color: #111; }
-header h1.title { font-size: 16pt; margin: 0 0 2px; } p.subtitle { margin: 0 0 8px; color: #444; }
-h2 { font-size: 12pt; margin: 12px 0 4px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
-table { border-collapse: collapse; width: 100%; font-size: 8.4pt; margin: 4px 0 8px; }
-th, td { border: 1px solid #bbb; padding: 3px 5px; vertical-align: top; text-align: left; }
-th { background: #eef2ef; } code { font-size: 8.2pt; } ul { margin: 2px 0 6px; padding-left: 18px; } li { margin: 1px 0; } p { margin: 4px 0; }
-a { color: #1a5c3a; }
