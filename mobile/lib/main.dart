@@ -18,8 +18,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final docs = await getApplicationDocumentsDirectory();
   final imagesDir = await Directory(p.join(docs.path, 'images')).create(recursive: true);
-  // App-specific external storage, so exports can be copied off with adb pull or a file manager.
-  final external = await getExternalStorageDirectory() ?? docs;
+  // Android: app-specific external storage, reachable with adb pull or a file manager.
+  // iOS: the documents folder, shown in the Files app.
+  final external = Platform.isAndroid ? await getExternalStorageDirectory() ?? docs : docs;
   final db = await openStudyDatabase(p.join(await getDatabasesPath(), 'postmortemid.db'));
   final package = await PackageInfo.fromPlatform();
 
@@ -35,8 +36,10 @@ Future<void> main() async {
 }
 
 Future<String> _deviceModel() async {
+  final device = DeviceInfoPlugin();
+  if (Platform.isIOS) return 'Apple ${(await device.iosInfo).modelName}';
   if (!Platform.isAndroid) return Platform.operatingSystem;
-  final info = await DeviceInfoPlugin().androidInfo;
+  final info = await device.androidInfo;
   return '${info.manufacturer} ${info.model}';
 }
 
