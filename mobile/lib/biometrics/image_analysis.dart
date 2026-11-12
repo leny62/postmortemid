@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -66,4 +67,43 @@ Future<ImageAnalysis> analyseFile(
     issues: checked.issues,
     embedding: input == null ? null : await encoder.embed(input),
   );
+}
+
+const _photoDecodeWidth = 1024;
+
+/// Quality check for full-size field photos, without encoding. The platform
+/// decoder shrinks the photo while decoding, which is much faster and lighter
+/// than a full-size decode in Dart. Size is judged on the original photo.
+Future<ImageAnalysis> checkPhotoQuality(String path, QualityThresholds thresholds) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(await File(path).readAsBytes());
+  final ui.ImageDescriptor descriptor;
+  try {
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+  } catch (_) {
+    buffer.dispose();
+    throw const FormatException('unsupported image file');
+  }
+  final (width, height) = (descriptor.width, descriptor.height);
+  final codec = await descriptor.instantiateCodec(
+    targetWidth: width > _photoDecodeWidth ? _photoDecodeWidth : null,
+  );
+  final frame = await codec.getNextFrame();
+  final rgba = (await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+  final (w, h) = (frame.image.width, frame.image.height);
+  frame.image.dispose();
+  codec.dispose();
+  descriptor.dispose();
+  buffer.dispose();
+
+  final scaled = await compute(
+    (ByteData data) => measureQuality(grayFromRgba(data.buffer.asUint8List(), w, h)),
+    rgba,
+  );
+  final measures = QualityMeasures(
+    width: width,
+    height: height,
+    brightness: scaled.brightness,
+    sharpness: scaled.sharpness,
+  );
+  return ImageAnalysis(measures: measures, issues: qualityIssues(measures, thresholds));
 }

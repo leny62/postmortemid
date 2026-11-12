@@ -35,6 +35,15 @@ GrayImage grayFromRgb(Uint8List rgb, int width, int height) {
   return GrayImage(width, height, out);
 }
 
+GrayImage grayFromRgba(Uint8List rgba, int width, int height) {
+  final out = Float64List(width * height);
+  for (var i = 0; i < out.length; i++) {
+    final r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
+    out[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  return GrayImage(width, height, out);
+}
+
 GrayImage centerSquare(GrayImage img) {
   final side = math.min(img.width, img.height);
   final top = (img.height - side) ~/ 2;

@@ -52,5 +52,6 @@ Future<AppServices> testServices(Directory dir, Map<String, List<double>> embedd
     deviceModel: 'Test Phone',
     appVersion: '0.1.0+test',
     analyser: (path) async => fakeAnalysis(path, embeddings),
+    photoCheck: (path) async => fakeAnalysis(path, embeddings),
   );
 }

@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
-const schemaVersion = 2;
+const schemaVersion = 4;
 
 const _schema = [
   '''
@@ -9,7 +9,11 @@ const _schema = [
     study_code TEXT NOT NULL UNIQUE,
     external_id TEXT,
     linkage_status TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    slaughter_time TEXT,
+    head_washed INTEGER,
+    nose_condition TEXT,
+    notes TEXT
   )''',
   '''
   CREATE TABLE capture_sessions (
@@ -33,7 +37,9 @@ const _schema = [
     brightness REAL NOT NULL,
     sharpness REAL NOT NULL,
     captured_at TEXT NOT NULL,
-    analysed INTEGER NOT NULL DEFAULT 0
+    analysed INTEGER NOT NULL DEFAULT 0,
+    discarded INTEGER NOT NULL DEFAULT 0,
+    uploaded_at TEXT
   )''',
   '''
   CREATE TABLE templates (
@@ -58,7 +64,10 @@ const _schema = [
     app_version TEXT NOT NULL,
     created_at TEXT NOT NULL
   )''',
+  _settingsTable,
 ];
+
+const _settingsTable = 'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)';
 
 Future<Database> openStudyDatabase(String path, {DatabaseFactory? factory}) {
   return (factory ?? databaseFactory).openDatabase(
@@ -75,6 +84,21 @@ Future<Database> openStudyDatabase(String path, {DatabaseFactory? factory}) {
         // Version 1 wrote image rows only after analysis, so every existing row is analysed.
         if (from < 2) {
           await db.execute('ALTER TABLE images ADD COLUMN analysed INTEGER NOT NULL DEFAULT 1');
+        }
+        if (from < 3) {
+          for (final column in [
+            'animals ADD COLUMN slaughter_time TEXT',
+            'animals ADD COLUMN head_washed INTEGER',
+            'animals ADD COLUMN nose_condition TEXT',
+            'animals ADD COLUMN notes TEXT',
+            'images ADD COLUMN discarded INTEGER NOT NULL DEFAULT 0',
+          ]) {
+            await db.execute('ALTER TABLE $column');
+          }
+        }
+        if (from < 4) {
+          await db.execute('ALTER TABLE images ADD COLUMN uploaded_at TEXT');
+          await db.execute(_settingsTable);
         }
       },
     ),

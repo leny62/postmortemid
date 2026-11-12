@@ -45,7 +45,7 @@ void main() {
 
   tearDown(() => tmp.delete(recursive: true));
 
-  testWidgets('home shows prototype status and the four actions', (tester) async {
+  testWidgets('home shows prototype status and the five actions', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(PostMortemIdApp(services: services));
@@ -53,7 +53,7 @@ void main() {
     expect(find.text('Test build.'), findsOneWidget);
     expect(find.text('test-encoder-v0'), findsOneWidget);
     expect(find.text('test-thresholds-v0'), findsOneWidget);
-    for (final action in ['Enrol', 'Verify', 'History', 'Export data']) {
+    for (final action in ['Field collection', 'Enrol', 'Verify', 'History', 'Export data']) {
       expect(find.text(action), findsOneWidget);
     }
   });
@@ -70,6 +70,8 @@ void main() {
   });
 
   testWidgets('history and verify screens open from home', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(PostMortemIdApp(services: services));
     await tester.tap(find.text('History'));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));

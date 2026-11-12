@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../capture/capture_controller.dart';
 import 'enrol_screen.dart';
+import 'field_study_screen.dart';
 import 'history_screen.dart';
 import 'verify_screen.dart';
 
@@ -25,6 +26,12 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _StatusCard(services: services),
           const SizedBox(height: 24),
+          _ActionTile(
+            icon: Icons.photo_library_outlined,
+            title: 'Field collection',
+            subtitle: 'Photograph study animals alive and after slaughter, log details, share',
+            onTap: () => open(FieldStudyScreen(services: services)),
+          ),
           _ActionTile(
             icon: Icons.add_a_photo_outlined,
             title: 'Enrol',
@@ -51,7 +58,7 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Works offline. Images and results are stored only on this phone.',
+            'Works offline. Images and results stay on this phone until you share them.',
             style: text.bodySmall,
             textAlign: TextAlign.center,
           ),
