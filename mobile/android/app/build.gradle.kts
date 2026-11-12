@@ -1,3 +1,11 @@
+import java.util.Properties
+
+// Release signing comes from android/key.properties (written by CI from secrets).
+// Without it, release builds fall back to the debug key for local testing.
+val keystore = Properties().apply {
+    rootProject.file("key.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -22,10 +30,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (!keystore.isEmpty) {
+            create("release") {
+                storeFile = rootProject.file(keystore.getProperty("storeFile"))
+                storePassword = keystore.getProperty("storePassword")
+                keyAlias = keystore.getProperty("keyAlias")
+                keyPassword = keystore.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // The prototype is installed by hand on study phones, not published, so the debug key is enough.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (keystore.isEmpty) "debug" else "release")
         }
     }
 }
