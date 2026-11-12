@@ -1,0 +1,11 @@
+services:
+  upload:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PMID_DATA_DIR: /data
+    volumes:
+      - /srv/pmid/data:/data
+    ports:
+      - "127.0.0.1:18092:8000"
