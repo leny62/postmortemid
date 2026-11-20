@@ -7,7 +7,10 @@ import '../data/field_export.dart';
 import '../data/field_upload.dart';
 import '../data/models.dart';
 import '../data/upload_client.dart';
+import '../privacy/field_consent.dart';
 import 'animal_field_screen.dart';
+import 'field_consent_dialog.dart';
+import 'privacy_screen.dart';
 
 /// Abattoir data collection: every study animal with its photo progress.
 class FieldStudyScreen extends StatefulWidget {
@@ -55,7 +58,20 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
     await _reload();
   }
 
+  Future<bool> _ensureConsent() async {
+    final repo = widget.services.repository;
+    final now = DateTime.now();
+    if (!consentNeeded(await repo.setting(fieldConsentKey), now)) return true;
+    if (!mounted) return false;
+    final agreed =
+        await showDialog<bool>(context: context, builder: (_) => const FieldConsentDialog()) ??
+        false;
+    if (agreed) await repo.saveSetting(fieldConsentKey, consentDay(now));
+    return agreed;
+  }
+
   Future<void> _add() async {
+    if (!await _ensureConsent() || !mounted) return;
     final codes = _animals!.map((a) => a.studyCode).toList();
     final lastSite = codes.reversed
         .map((c) => fieldCodePattern.firstMatch(c)?.group(1))
@@ -186,6 +202,12 @@ class _FieldStudyScreenState extends State<FieldStudyScreen> {
           PopupMenuButton<void>(
             itemBuilder: (_) => [
               PopupMenuItem(onTap: _editServer, child: const Text('Study server settings')),
+              PopupMenuItem(
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute<void>(builder: (_) => const PrivacyScreen())),
+                child: const Text('Privacy and consent'),
+              ),
             ],
           ),
           IconButton(
