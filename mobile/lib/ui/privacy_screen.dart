@@ -34,6 +34,12 @@ class PrivacyScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => showLicensePage(context: context, applicationName: 'PostMortemID'),
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('Open-source licences'),
+          ),
           const SizedBox(height: 16),
           Text(
             'Questions or complaints: ALU Research Ethics Committee, $ethicsContact',

@@ -47,6 +47,7 @@ void main() {
       expect(find.text(p.keptBy), findsOneWidget);
     }
     expect(find.text('Limits'), findsOneWidget);
+    expect(find.text('Open-source licences'), findsOneWidget);
     expect(find.text(privacyPolicyVersion), findsOneWidget);
   });
 
