@@ -4,6 +4,7 @@ import '../capture/capture_controller.dart';
 import 'enrol_screen.dart';
 import 'field_study_screen.dart';
 import 'history_screen.dart';
+import 'privacy_screen.dart';
 import 'verify_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -55,6 +56,12 @@ class HomeScreen extends StatelessWidget {
             title: 'Export data',
             subtitle: 'Save all study records as CSV files on this phone',
             onTap: () => _export(context),
+          ),
+          _ActionTile(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy and consent',
+            subtitle: 'What is collected, what never leaves this phone, and who decides',
+            onTap: () => open(const PrivacyScreen()),
           ),
           const SizedBox(height: 16),
           Text(
